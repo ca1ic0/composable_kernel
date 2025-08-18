@@ -97,11 +97,12 @@ struct MultiplyMultiply
     }
 };
 
+static constexpr int KPack = 8;
+
 void preShuffleBuffer(const F16* src, F16* dst, int N, int K, int NXdl)
 {
-    int KPack = 16 / sizeof(F16);
     int NLane = NXdl;
-    int KLane = 64 / NLane;
+    int KLane = ck::get_warp_size() / NLane;
 
     int K0 = K / (KLane * KPack);
     // K -> K0 KLane KPack
@@ -147,7 +148,7 @@ using DeviceOpInstance = ck::tensor_operation::device::DeviceGemmMultiD_Xdl_CShu
         <      Row,      Col, DsLayout, ELayout, A0DataType, B0DataType, DsDataType, EDataType, AccDataType, CShuffleDataType,
                AElementOp,  BElementOp, CDEElementOp,       GemmSpec,   256,
                32,   128,    128,
-               8,   8,
+               KPack,   KPack,
                16,   16,
                2,    2,
                S<16, 16, 1>, S<1, 0, 2>, S<1, 0, 2>, 2, 8, 8, 0,
@@ -211,8 +212,8 @@ int main(int argc, char* argv[])
         exit(0);
     }
 
-    // temp disable on gfx11 & gfx12
-    if(ck::is_gfx11_supported() || ck::is_gfx12_supported())
+    // temp disable on gfx11
+    if(ck::is_gfx11_supported())
     {
         return 0;
     }
