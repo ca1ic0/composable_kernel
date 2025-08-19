@@ -96,116 +96,117 @@ using ReferenceGemmInstance = ck::tensor_operation::host::
     ReferenceGemm<ADataType, BDataType, EDataType, float, PassThrough, PassThrough, CDEElementOp>;
 
 int main()
-
+{
     // temp disable on gfx11
     if(ck::is_gfx11_supported())
-{
+    {
+        return 0;
+    }
+    bool do_verification = true;
+    bool time_kernel     = false;
+
+    // GEMM shape
+    ck::index_t M = 1024;
+    ck::index_t N = 1024;
+    ck::index_t K = 1024;
+
+    ck::index_t StrideA = 1024;
+    ck::index_t StrideB = 1024;
+    ck::index_t StrideE = 1024;
+
+    float requant_scale = 0.03;
+
+    auto f_host_tensor_descriptor =
+        [](std::size_t row, std::size_t col, std::size_t stride, auto layout) {
+            using namespace ck::literals;
+
+            if(std::is_same<decltype(layout), ck::tensor_layout::gemm::RowMajor>::value)
+            {
+                return HostTensorDescriptor(std::vector<std::size_t>({row, col}),
+                                            std::vector<std::size_t>({stride, 1_uz}));
+            }
+            else
+            {
+                return HostTensorDescriptor(std::vector<std::size_t>({row, col}),
+                                            std::vector<std::size_t>({1_uz, stride}));
+            }
+        };
+
+    Tensor<ADataType> a_m_k(f_host_tensor_descriptor(M, K, StrideA, ALayout{}));
+    Tensor<BDataType> b_k_n(f_host_tensor_descriptor(K, N, StrideB, BLayout{}));
+    Tensor<EDataType> e_m_n_host_result(f_host_tensor_descriptor(M, N, StrideE, ELayout{}));
+    Tensor<EDataType> e_m_n_device_result(f_host_tensor_descriptor(M, N, StrideE, ELayout{}));
+
+    std::cout << "a_m_k: " << a_m_k.mDesc << std::endl;
+    std::cout << "b_k_n: " << b_k_n.mDesc << std::endl;
+    std::cout << "e_m_n: " << e_m_n_host_result.mDesc << std::endl;
+
+    a_m_k.GenerateTensorValue(GeneratorTensor_2<ADataType>{-128, 127});
+    b_k_n.GenerateTensorValue(GeneratorTensor_2<BDataType>{-128, 127});
+
+    DeviceMem a_device_buf(sizeof(ADataType) * a_m_k.mDesc.GetElementSpaceSize());
+    DeviceMem b_device_buf(sizeof(BDataType) * b_k_n.mDesc.GetElementSpaceSize());
+    DeviceMem e_device_buf(sizeof(EDataType) * e_m_n_device_result.mDesc.GetElementSpaceSize());
+
+    a_device_buf.ToDevice(a_m_k.mData.data());
+    b_device_buf.ToDevice(b_k_n.mData.data());
+
+    auto a_element_op   = PassThrough{};
+    auto b_element_op   = PassThrough{};
+    auto cde_element_op = CDEElementOp{requant_scale, ActivationOp{}};
+
+    // do GEMM
+    auto gemm     = DeviceGemmInstance{};
+    auto invoker  = gemm.MakeInvoker();
+    auto argument = gemm.MakeArgument(a_device_buf.GetDeviceBuffer(),
+                                      b_device_buf.GetDeviceBuffer(),
+                                      {},
+                                      e_device_buf.GetDeviceBuffer(),
+                                      M,
+                                      N,
+                                      K,
+                                      StrideA,
+                                      StrideB,
+                                      {},
+                                      StrideE,
+                                      a_element_op,
+                                      b_element_op,
+                                      cde_element_op);
+
+    if(!gemm.IsSupportedArgument(argument))
+    {
+        throw std::runtime_error(
+            "wrong! device_gemm with the specified compilation parameters does "
+            "not support this GEMM problem");
+    }
+
+    float ave_time = invoker.Run(argument, StreamConfig{nullptr, time_kernel});
+
+    std::size_t flop = std::size_t(2) * M * N * K;
+    std::size_t num_btype =
+        sizeof(ADataType) * M * K + sizeof(BDataType) * K * N + sizeof(EDataType) * M * N;
+
+    float tflops = static_cast<float>(flop) / 1.E9 / ave_time;
+
+    float gb_per_sec = num_btype / 1.E6 / ave_time;
+
+    std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s, "
+              << gemm.GetTypeString() << std::endl;
+
+    e_device_buf.FromDevice(e_m_n_device_result.mData.data());
+
+    if(do_verification)
+    {
+        auto ref_gemm    = ReferenceGemmInstance{};
+        auto ref_invoker = ref_gemm.MakeInvoker();
+
+        auto ref_argument = ref_gemm.MakeArgument(
+            a_m_k, b_k_n, e_m_n_host_result, a_element_op, b_element_op, cde_element_op);
+
+        ref_invoker.Run(ref_argument);
+
+        return ck::utils::check_err(e_m_n_device_result, e_m_n_host_result) ? 0 : 1;
+    }
+
     return 0;
-}
-bool do_verification = true;
-bool time_kernel     = false;
-
-// GEMM shape
-ck::index_t M = 1024;
-ck::index_t N = 1024;
-ck::index_t K = 1024;
-
-ck::index_t StrideA = 1024;
-ck::index_t StrideB = 1024;
-ck::index_t StrideE = 1024;
-
-float requant_scale = 0.03;
-
-auto f_host_tensor_descriptor =
-    [](std::size_t row, std::size_t col, std::size_t stride, auto layout) {
-        using namespace ck::literals;
-
-        if(std::is_same<decltype(layout), ck::tensor_layout::gemm::RowMajor>::value)
-        {
-            return HostTensorDescriptor(std::vector<std::size_t>({row, col}),
-                                        std::vector<std::size_t>({stride, 1_uz}));
-        }
-        else
-        {
-            return HostTensorDescriptor(std::vector<std::size_t>({row, col}),
-                                        std::vector<std::size_t>({1_uz, stride}));
-        }
-    };
-
-Tensor<ADataType> a_m_k(f_host_tensor_descriptor(M, K, StrideA, ALayout{}));
-Tensor<BDataType> b_k_n(f_host_tensor_descriptor(K, N, StrideB, BLayout{}));
-Tensor<EDataType> e_m_n_host_result(f_host_tensor_descriptor(M, N, StrideE, ELayout{}));
-Tensor<EDataType> e_m_n_device_result(f_host_tensor_descriptor(M, N, StrideE, ELayout{}));
-
-std::cout << "a_m_k: " << a_m_k.mDesc << std::endl;
-std::cout << "b_k_n: " << b_k_n.mDesc << std::endl;
-std::cout << "e_m_n: " << e_m_n_host_result.mDesc << std::endl;
-
-a_m_k.GenerateTensorValue(GeneratorTensor_2<ADataType>{-128, 127});
-b_k_n.GenerateTensorValue(GeneratorTensor_2<BDataType>{-128, 127});
-
-DeviceMem a_device_buf(sizeof(ADataType) * a_m_k.mDesc.GetElementSpaceSize());
-DeviceMem b_device_buf(sizeof(BDataType) * b_k_n.mDesc.GetElementSpaceSize());
-DeviceMem e_device_buf(sizeof(EDataType) * e_m_n_device_result.mDesc.GetElementSpaceSize());
-
-a_device_buf.ToDevice(a_m_k.mData.data());
-b_device_buf.ToDevice(b_k_n.mData.data());
-
-auto a_element_op   = PassThrough{};
-auto b_element_op   = PassThrough{};
-auto cde_element_op = CDEElementOp{requant_scale, ActivationOp{}};
-
-// do GEMM
-auto gemm     = DeviceGemmInstance{};
-auto invoker  = gemm.MakeInvoker();
-auto argument = gemm.MakeArgument(a_device_buf.GetDeviceBuffer(),
-                                  b_device_buf.GetDeviceBuffer(),
-                                  {},
-                                  e_device_buf.GetDeviceBuffer(),
-                                  M,
-                                  N,
-                                  K,
-                                  StrideA,
-                                  StrideB,
-                                  {},
-                                  StrideE,
-                                  a_element_op,
-                                  b_element_op,
-                                  cde_element_op);
-
-if(!gemm.IsSupportedArgument(argument))
-{
-    throw std::runtime_error("wrong! device_gemm with the specified compilation parameters does "
-                             "not support this GEMM problem");
-}
-
-float ave_time = invoker.Run(argument, StreamConfig{nullptr, time_kernel});
-
-std::size_t flop = std::size_t(2) * M * N * K;
-std::size_t num_btype =
-    sizeof(ADataType) * M * K + sizeof(BDataType) * K * N + sizeof(EDataType) * M * N;
-
-float tflops = static_cast<float>(flop) / 1.E9 / ave_time;
-
-float gb_per_sec = num_btype / 1.E6 / ave_time;
-
-std::cout << "Perf: " << ave_time << " ms, " << tflops << " TFlops, " << gb_per_sec << " GB/s, "
-          << gemm.GetTypeString() << std::endl;
-
-e_device_buf.FromDevice(e_m_n_device_result.mData.data());
-
-if(do_verification)
-{
-    auto ref_gemm    = ReferenceGemmInstance{};
-    auto ref_invoker = ref_gemm.MakeInvoker();
-
-    auto ref_argument = ref_gemm.MakeArgument(
-        a_m_k, b_k_n, e_m_n_host_result, a_element_op, b_element_op, cde_element_op);
-
-    ref_invoker.Run(ref_argument);
-
-    return ck::utils::check_err(e_m_n_device_result, e_m_n_host_result) ? 0 : 1;
-}
-
-return 0;
 }
