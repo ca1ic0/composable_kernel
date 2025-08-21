@@ -970,6 +970,19 @@ struct mfma_type<MfmaInstr::wmma_f32_16x16x16_f16> : public mfma_type_gfx11_base
     __device__ void run(const FloatA& a, const FloatB& b, FloatC& reg_c) const
     {
         intrin_wmma_f32_16x16x16_f16_w32<MPerWmma, NPerWmma>::Run(a, b, reg_c);
+#if 0
+        //if (threadIdx.x == 127)
+        {
+        using uint32x8_t  = uint32_t __attribute__((ext_vector_type(8)));
+        uint32x8_t a0 = bit_cast<uint32x8_t>(a);
+        uint32x8_t b0 = bit_cast<uint32x8_t>(b);
+        float8_t c0 = bit_cast<float8_t>(reg_c);
+        printf("[%u]: a: %08x %08x %08x %08x %08x %08x %08x %08x b: %08x %08x %08x %08x %08x %08x %08x %08x  c: %f %f %f %f %f %f %f %f \n", threadIdx.x, 
+            a0[0], a0[1],a0[2], a0[3],a0[4], a0[5],a0[6], a0[7], 
+            b0[0], b0[1],b0[2], b0[3],b0[4], b0[5],b0[6], b0[7], 
+             c0[0], c0[1],c0[2], c0[3],c0[4], c0[5],c0[6], c0[7]);
+        }
+#endif
     }
 };
 
@@ -1934,9 +1947,15 @@ struct XdlopsGemm
         return make_tuple(blk_id, blk_td);
     }
 
+    template <bool swizzle>
     __device__ static auto GetGfx11InputBlkIdx()
     {
-        const auto laneId = GetLaneId() % mfma_instr.num_threads_per_blk;
+        auto laneId = GetLaneId() % mfma_instr.num_threads_per_blk;
+
+        if constexpr(swizzle)
+        {
+            laneId = ((laneId & 1) << 3) | (laneId >> 1);
+        }
 
         constexpr auto threadidx_to_blk_idx_adaptor = make_single_stage_tensor_adaptor(
             make_tuple(make_merge_transform(
@@ -1957,7 +1976,7 @@ struct XdlopsGemm
     {
         const auto laneId = GetLaneId();
 #if defined(__gfx11__)
-        const auto blk_idx = GetGfx11InputBlkIdx();
+        const auto blk_idx = GetGfx11InputBlkIdx<true>();
 #else
         const auto blk_idx = GetBlkIdx();
 #endif
@@ -1979,7 +1998,7 @@ struct XdlopsGemm
     {
         const auto laneId = GetLaneId();
 #if defined(__gfx11__)
-        const auto blk_idx = GetGfx11InputBlkIdx();
+        const auto blk_idx = GetGfx11InputBlkIdx<false>();
 #else
         const auto blk_idx = GetBlkIdx();
 #endif

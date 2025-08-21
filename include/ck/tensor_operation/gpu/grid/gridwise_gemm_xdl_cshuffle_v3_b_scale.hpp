@@ -1457,10 +1457,15 @@ struct GridwiseGemm_xdl_cshuffle_v3
         constexpr index_t NWaves   = NPerBlock / (NXdlPerWave * NPerXdl);
         constexpr index_t MWaves   = MPerBlock / (MXdlPerWave * MPerXdl);
         constexpr index_t WaveSize = BlockSize / (MWaves * NWaves);
-        auto b_thread_offset_n     = get_thread_local_1d_id() % NPerXdl +
+#if defined(__gfx11__)
+        auto b_thread_offset_n = get_thread_local_1d_id() % NPerXdl +
+                                 (get_thread_local_1d_id() / WaveSize) % NWaves * NPerXdl;
+        auto b_thread_offset_k = (get_thread_local_1d_id() % 16) / NPerXdl * KPerThread;
+#else
+        auto b_thread_offset_n = get_thread_local_1d_id() % NPerXdl +
                                  (get_thread_local_1d_id() / WaveSize) % NWaves * NPerXdl;
         auto b_thread_offset_k = (get_thread_local_1d_id() % WaveSize) / NPerXdl * KPerThread;
-
+#endif
         auto b_scale_thread_copy =
             ThreadwiseTensorSliceTransfer_v2<BScaleType,
                                              BScaleType,
@@ -1930,10 +1935,15 @@ struct GridwiseGemm_xdl_cshuffle_v3
         constexpr index_t NWaves   = NPerBlock / (NXdlPerWave * NPerXdl);
         constexpr index_t MWaves   = MPerBlock / (MXdlPerWave * MPerXdl);
         constexpr index_t WaveSize = BlockSize / (MWaves * NWaves);
-
+#if defined(__gfx11__)
+        auto b_thread_offset_n = get_thread_local_1d_id() % NPerXdl +
+                                 (get_thread_local_1d_id() / WaveSize) % NWaves * NPerXdl;
+        auto b_thread_offset_k = (get_thread_local_1d_id() % 16) / NPerXdl * KPerThread;
+#else
         auto b_thread_offset_n = get_thread_local_1d_id() % NPerXdl +
                                  (get_thread_local_1d_id() / WaveSize) % NWaves * NPerXdl;
         auto b_thread_offset_k = (get_thread_local_1d_id() % WaveSize) / NPerXdl * KPerThread;
+#endif
 
         auto b_scale_thread_copy =
             ThreadwiseTensorSliceTransfer_v2<BScaleType,
