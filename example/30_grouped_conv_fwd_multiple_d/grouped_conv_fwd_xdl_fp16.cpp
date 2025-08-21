@@ -21,12 +21,4 @@ using OutElementOp = PassThrough;
 
 #include "run_grouped_conv_fwd_example.inc"
 
-int main(int argc, char* argv[])
-{
-    // temp disable on gfx11
-    if(ck::is_gfx11_supported())
-    {
-        return 0;
-    }
-    return !run_grouped_conv_fwd_example(argc, argv);
-}
+int main(int argc, char* argv[]) { return !run_grouped_conv_fwd_example(argc, argv); }

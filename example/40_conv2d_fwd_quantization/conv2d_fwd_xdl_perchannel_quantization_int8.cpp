@@ -82,11 +82,6 @@ using DeviceGroupedConvNDFwdInstance =
 
 int main()
 {
-    // temp disable on gfx11
-    if(ck::is_gfx11_supported())
-    {
-        return 0;
-    }
     const auto out_element_op = OutElementOp{ActivationOp{}};
     run_conv2d_fwd_perchannel_quantization_example(out_element_op);
 }

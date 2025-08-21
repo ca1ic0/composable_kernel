@@ -97,11 +97,6 @@ using ReferenceGemmInstance = ck::tensor_operation::host::
 
 int main()
 {
-    // temp disable on gfx11
-    if(ck::is_gfx11_supported())
-    {
-        return 0;
-    }
     bool do_verification = true;
     bool time_kernel     = false;
 

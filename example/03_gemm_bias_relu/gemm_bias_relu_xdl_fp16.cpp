@@ -113,13 +113,13 @@ int main(int argc, char* argv[])
     bool time_kernel     = false;
 
     // GEMM shape
-    ck::index_t M = 3840;
-    ck::index_t N = 4096;
-    ck::index_t K = 4096;
+    ck::index_t M = 1920;
+    ck::index_t N = 2048;
+    ck::index_t K = 2048;
 
-    ck::index_t StrideA = 4096;
-    ck::index_t StrideB = 4096;
-    ck::index_t StrideE = 4096;
+    ck::index_t StrideA = 2048;
+    ck::index_t StrideB = 2048;
+    ck::index_t StrideE = 2048;
 
     if(argc == 1)
     {
@@ -153,11 +153,7 @@ int main(int argc, char* argv[])
         printf("arg4 to 9: M (256x), N(128x), K(32x), StrideA, StrideB, StrideE\n");
         exit(0);
     }
-    // temp disable on gfx11
-    if(ck::is_gfx11_supported())
-    {
-        return 0;
-    }
+
     auto f_host_tensor_descriptor =
         [](std::size_t row, std::size_t col, std::size_t stride, auto layout) {
             using namespace ck::literals;

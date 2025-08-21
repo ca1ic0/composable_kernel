@@ -119,11 +119,6 @@ using DeviceOpInstance = ck::tensor_operation::device::DeviceContractionMultiple
 
 int main(int argc, char* argv[])
 {
-    // temp disable on gfx11
-    if(ck::is_gfx11_supported())
-    {
-        return 0;
-    }
     bool do_verification = true;
     int init_method      = 1;
     bool time_kernel     = false;

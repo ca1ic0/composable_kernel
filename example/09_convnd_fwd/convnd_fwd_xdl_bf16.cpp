@@ -76,12 +76,4 @@ using DeviceGroupedConvNDFwdInstance =
 
 #include "run_convnd_fwd_example.inc"
 
-int main(int argc, char* argv[])
-{
-    // temp disable on gfx11
-    if(ck::is_gfx11_supported())
-    {
-        return 0;
-    }
-    return run_convnd_fwd_example(argc, argv) ? 0 : 1;
-}
+int main(int argc, char* argv[]) { return run_convnd_fwd_example(argc, argv) ? 0 : 1; }

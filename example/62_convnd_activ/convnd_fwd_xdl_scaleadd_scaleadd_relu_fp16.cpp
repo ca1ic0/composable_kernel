@@ -267,12 +267,4 @@ bool run_grouped_conv(bool do_verification,
 
 #include "run_convnd_activ_example.inc"
 
-int main(int argc, char* argv[])
-{
-    // temp disable on gfx11
-    if(ck::is_gfx11_supported())
-    {
-        return 0;
-    }
-    return !run_convnd_example(argc, argv);
-}
+int main(int argc, char* argv[]) { return !run_convnd_example(argc, argv); }
