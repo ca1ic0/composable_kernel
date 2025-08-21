@@ -129,11 +129,6 @@ auto f_host_tensor_descriptor2d =
 
 int main()
 {
-    // temp disable on gfx11
-    if(ck::is_gfx11_supported())
-    {
-        return 0;
-    }
     ck::index_t M = 1024;
     ck::index_t N = 1024;
     ck::index_t K = 1024;

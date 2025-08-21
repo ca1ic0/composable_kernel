@@ -607,11 +607,6 @@ struct DeviceGemmMultipleABD_Xdl_CShuffle : public DeviceGemmMultipleABD<AsLayou
         {
             return false;
         }
-        // temp disable on gfx11
-        if(ck::is_gfx11_supported())
-        {
-            return false;
-        }
         if((arg.K % AK1 != 0 || arg.K % BK1 != 0) && !(GemmSpec == GemmSpecialization::MKPadding ||
                                                        GemmSpec == GemmSpecialization::NKPadding ||
                                                        GemmSpec == GemmSpecialization::MNKPadding ||
