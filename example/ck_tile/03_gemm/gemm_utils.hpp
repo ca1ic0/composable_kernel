@@ -254,6 +254,28 @@ struct GemmConfigComputeV5 : public GemmConfigBase
 };
 
 template <typename PrecType>
+struct GemmConfigPreshuffleDecodeV1 : public GemmConfigBase
+{
+    static constexpr ck_tile::index_t M_Tile = 16;
+    static constexpr ck_tile::index_t N_Tile = 64;
+    static constexpr ck_tile::index_t K_Tile = 256; //256 / sizeof(PrecType);
+
+    static constexpr ck_tile::index_t M_Warp = 1;
+    static constexpr ck_tile::index_t N_Warp = 4;
+    static constexpr ck_tile::index_t K_Warp = 1;
+
+    static constexpr ck_tile::index_t M_Warp_Tile = 16;
+    static constexpr ck_tile::index_t N_Warp_Tile = 16;
+    static constexpr ck_tile::index_t K_Warp_Tile = 32; //get_k_warp_tile_flatmm<PrecType, M_Warp_Tile>();
+
+    static constexpr int kBlockPerCu           = 1;
+    static constexpr auto Scheduler            = ck_tile::GemmPipelineScheduler::Default;
+    static constexpr ck_tile::index_t Pipeline = CK_TILE_PIPELINE_PRESHUFFLE_V1;
+    static constexpr bool Preshuffle           = true;
+    static constexpr bool DoubleSmemBuffer     = false;
+};
+
+template <typename PrecType>
 struct GemmConfigPreshuffleDecode : public GemmConfigBase
 {
     static constexpr ck_tile::index_t M_Tile = 16;
@@ -341,6 +363,15 @@ template <>
 struct GemmTypeConfig<ck_tile::half_t, ck_tile::pk_int4_t, ck_tile::half_t>
 {
     using ADataType   = ck_tile::half_t;
+    using BDataType   = ck_tile::pk_int4_t;
+    using AccDataType = float;
+    using CDataType   = ck_tile::half_t;
+};
+
+template <>
+struct GemmTypeConfig<ck_tile::fp8_t, ck_tile::pk_int4_t, ck_tile::half_t>
+{
+    using ADataType   = ck_tile::fp8_t;
     using BDataType   = ck_tile::pk_int4_t;
     using AccDataType = float;
     using CDataType   = ck_tile::half_t;
@@ -474,9 +505,9 @@ struct PipelineTypeTraits<CK_TILE_PIPELINE_PRESHUFFLE_V2>
 auto create_args(int argc, char* argv[])
 {
     ck_tile::ArgParser arg_parser;
-    arg_parser.insert("m", "3840", "m dimension")
-        .insert("n", "4096", "n dimension")
-        .insert("k", "2048", "k dimension")
+    arg_parser.insert("m", "16", "m dimension")
+        .insert("n", "64", "n dimension")
+        .insert("k", "256", "k dimension")
         .insert("a_layout", "R", "A tensor data layout - Row by default")
         .insert("b_layout", "C", "B tensor data layout - Column by default")
         .insert("c_layout", "R", "C tensor data layout - Row by default")
@@ -484,12 +515,12 @@ auto create_args(int argc, char* argv[])
         .insert("stride_b", "0", "Tensor B stride")
         .insert("stride_c", "0", "Tensor C stride")
         .insert("v", "2", "0. No validation, 1. Validation on CPU, 2. Validation on GPU")
-        .insert("prec", "fp16", "data type. fp16/bf16/fp8/bf8")
-        .insert("warmup", "50", "number of iterations before benchmark the kernel")
-        .insert("repeat", "100", "number of iterations to benchmark the kernel")
+        .insert("prec", "int4", "data type. fp16/bf16/fp8/bf8")
+        .insert("warmup", "0", "number of iterations before benchmark the kernel")
+        .insert("repeat", "1", "number of iterations to benchmark the kernel")
         .insert("timer", "gpu", "gpu:gpu timer, cpu:cpu timer")
         .insert("split_k", "1", "splitK value")
-        .insert("init", "0", "0:random, 1:linear, 2:constant(1)")
+        .insert("init", "2", "0:random, 1:linear, 2:constant(1)")
         .insert("persistent", "0", "0:non-persistent, 1:persistent")
         .insert("flush_cache", "true", "flush cache before running the kernel, defaults to true")
         .insert("rotating_count", "1000", "rotating count, defaults to 1000");

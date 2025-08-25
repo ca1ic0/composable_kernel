@@ -975,6 +975,20 @@ struct UniversalGemmKernel
         const auto& bs_block_window = gemm_tile_windows.at(I1);
         const auto& ds_block_window = gemm_tile_windows.at(I2);
 
+        // let us print the window shapes
+        if(threadIdx.x == 0 && blockIdx.x == 0)
+        {
+            printf("***********Tile Window Shapes being sent to memory pipeline**************\n");
+            printf("*********threadIdx.x: %u, blockIdx.x: %u*********\n", threadIdx.x, blockIdx.x);
+            printf("a_block_window shape: [%d, %d]\n",
+                   static_cast<index_t>(as_block_window[I0].get_window_lengths()[number<0>{}]),
+                   static_cast<index_t>(as_block_window[I0].get_window_lengths()[number<1>{}]));
+            printf("b_block_window shape: [%d, %d]\n",
+                   static_cast<index_t>(bs_block_window[I0].get_window_lengths()[number<0>{}]),
+                   static_cast<index_t>(bs_block_window[I0].get_window_lengths()[number<1>{}]));
+            printf("****************************************************\n");
+        }
+
         const auto& c_block_tile =
             GemmPipeline{}(as_block_window[I0], bs_block_window[I0], num_loop, smem_ptr_0);
 

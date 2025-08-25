@@ -263,6 +263,13 @@ int run_gemm_example(ck_tile::ArgParser& arg_parser)
                                           ck_tile::bf8_t,
                                           ck_tile::half_t>(a_layout, b_layout, arg_parser);
     }
+    else if(data_type == "int4")
+    {
+        return run_gemm_example_prec_type<GemmConfig<ck_tile::half_t>,
+                                          ck_tile::fp8_t,
+                                          ck_tile::pk_int4_t,
+                                          ck_tile::half_t>(a_layout, b_layout, arg_parser);
+    }
     else
     {
         throw std::runtime_error("Unsupported data type for this operation !!!");
@@ -277,7 +284,7 @@ int main(int argc, char* argv[])
 
     try
     {
-        return !run_gemm_example<GemmConfigPreshuffleDecode>(arg_parser);
+        return !run_gemm_example<GemmConfigPreshuffleDecodeV1>(arg_parser);
     }
     catch(const std::runtime_error& e)
     {

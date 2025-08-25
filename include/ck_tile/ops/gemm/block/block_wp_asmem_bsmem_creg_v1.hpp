@@ -19,6 +19,7 @@ struct BlockWeightPreshuffleASmemBSmemCRegV1
     using ADataType      = remove_cvref_t<typename Problem::ADataType>;
     using BDataType      = remove_cvref_t<typename Problem::BDataType>;
     using CDataType      = remove_cvref_t<typename Problem::CDataType>;
+    using ComputeDataType= remove_cvref_t<typename Problem::ComputeDataType>;
     using BlockGemmShape = remove_cvref_t<typename Problem::BlockGemmShape>;
 
     static constexpr auto I0   = number<0>();
@@ -64,6 +65,52 @@ struct BlockWeightPreshuffleASmemBSmemCRegV1
         auto c_block_tensor = make_static_distributed_tensor<CDataType>(c_block_dstr);
         return c_block_tensor;
     }
+
+     template <typename WarpWindow, typename WarpTile>
+    CK_TILE_DEVICE static void load_interleaved_pk_type(WarpTile& warp_tile,
+                                                        const WarpWindow& warp_window)
+    {
+        const element_wise::PassThroughPack8 elementwise_op{};
+        const index_t UnaryOpSize = 8;
+        
+        static_assert(WarpTile::get_thread_buffer_size() % UnaryOpSize == 0);
+        constexpr index_t thread_buffer_size = WarpTile::get_thread_buffer_size() / UnaryOpSize;
+        const auto in_dstr_tensors           = load_tile(warp_window);
+
+
+        // if(get_block_id() == 0 && get_warp_id() == 0 && get_thread_id() == 0){
+        //     auto& a_tb  = in_dstr_tensors.get_thread_buffer();
+        //     printf("---------Warp window thread buffer size=%d, first up to 16:\n", int(decltype(in_dstr_tensors)::get_thread_buffer_size()));
+        //     for(int j = 0; j < (thread_buffer_size < 16 ? thread_buffer_size : 16); ++j)
+        //     {
+        //         float v = pk_int4_t_to_fp32x2_t(a_tb.at(j)).x;
+        //         printf(" --------- Warp Window[%d]=%f\n", j, v);
+        //     }
+        //     //  printf("type convert input[%d] : %f\n",
+        //     //          get_thread_id(), pk_int4_t_to_fp32x2_t((in_dstr_tensors.get_thread_buffer().at(get_thread_id()))).x);
+        // }
+        using ComputeVectorType = ComputeDataType __attribute__((ext_vector_type(UnaryOpSize)));
+        static_for<0, thread_buffer_size, 1>{}([&](auto i) {
+            elementwise_op(warp_tile.get_thread_buffer().template get_as<ComputeVectorType>()(i),
+                           in_dstr_tensors.get_thread_buffer().template get_as<pk_int4x4_t>()[i]);
+        });
+
+        // if(get_block_id() == 0 && get_warp_id() == 0 && get_thread_id() == 0){
+        //     auto& a_tb  = warp_tile.get_thread_buffer();
+        //     printf("*******Warp Tile thread buffer size=%d, first up to 16:\n", int(WarpTile::get_thread_buffer_size()));
+        //     for(int j = 0; j < (thread_buffer_size < 16 ? thread_buffer_size : 16); ++j)
+        //     {
+        //         float v = type_convert<float>(a_tb.at(j));
+        //         printf(" ******* Warp Tile[%d]=%f\n", j, v);
+        //     }
+        // }
+
+        // if(get_block_id() == 0 && get_warp_id() == 0){
+        //      printf("type_convert output[%d]: %f\n",
+        //              get_thread_id(), type_convert<float>(warp_tile.get_thread_buffer().at(get_thread_id())));
+        // }
+    }
+
 
     // C += A * B
     template <typename CBlockTensor, typename ABlockWindow, typename BFlatBlockTensor>

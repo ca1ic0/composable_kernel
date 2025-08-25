@@ -309,6 +309,8 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
     ck_tile::index_t N = arg_parser.get_int("n");
     ck_tile::index_t K = arg_parser.get_int("k");
 
+    std::cout << "M:" << M << " N:" << N << " K:" << K << std::endl;
+
     ck_tile::index_t stride_A = arg_parser.get_int("stride_a");
     ck_tile::index_t stride_B = arg_parser.get_int("stride_b");
     ck_tile::index_t stride_C = arg_parser.get_int("stride_c");
@@ -354,8 +356,10 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
     }
     else if(init_method == 2)
     {
-        ck_tile::FillUniformDistribution<ADataType>{1.f, 1.f}(a_m_k);
-        ck_tile::FillUniformDistribution<BDataType>{1.f, 1.f}(b_k_n);
+        // ck_tile::FillUniformDistribution<ADataType>{1.f, 1.f}(a_m_k);
+        // ck_tile::FillUniformDistribution<BDataType>{1.f, 1.f}(b_k_n);
+        ck_tile::FillConstant<ADataType>{ck_tile::type_convert<ADataType>(1.0f)}(a_m_k);
+        ck_tile::FillConstant<BDataType>{0x11}(b_k_n);
     }
     else
     {
@@ -400,6 +404,7 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
             }
             permute_vectors_i4x4_b(b_k_n_dev);
             b_k_n_dev_buf.ToDevice(b_k_n_dev.data());
+            //TODO:: need to print b_k_n_dev data to verify
         }
         else
         {
