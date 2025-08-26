@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
 #pragma once
+#include "ck_tile/host.hpp"
+#include "ck_tile/core.hpp"
+#include "ck_tile/core/utility/bit_cast.hpp"
 
 template <typename Layout>
 static constexpr inline auto is_row_major(Layout layout_)
@@ -359,7 +362,8 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
         // ck_tile::FillUniformDistribution<ADataType>{1.f, 1.f}(a_m_k);
         // ck_tile::FillUniformDistribution<BDataType>{1.f, 1.f}(b_k_n);
         ck_tile::FillConstant<ADataType>{ck_tile::type_convert<ADataType>(1.0f)}(a_m_k);
-        ck_tile::FillConstant<BDataType>{0x11}(b_k_n);
+        ck_tile::FillConstant<BDataType>{0x11}(b_k_n); //for int4
+        //ck_tile::FillConstant<BDataType>{ck_tile::type_convert<ADataType>(1.0f)}(b_k_n);
     }
     else
     {
@@ -380,7 +384,26 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
 
     if constexpr(preshuffle)
     {
-        ck_tile::HostTensor<BDataType> b_shuffle_host = shuffle_b<GemmConfig>(b_k_n);
+        ck_tile::HostTensor<BDataType> b_k_n_dev = b_k_n;
+        if constexpr(std::is_same_v<BDataType, ck_tile::pk_int4_t>){
+            permute_vectors_i4x4_b(b_k_n_dev);
+        }
+        // for(int i = 0; i < 10; i++)
+        // {
+        //     auto float_value = ck_tile::pk_int4_t_to_fp32x2_t_signed_conversion(b_k_n_dev.data()[i]).x;
+        //     printf("  [%d] = %f\n", i, float_value);
+        //     //std::cout << std::hex << ck_tile::bit_cast<unsigned char>(b_k_n_dev.data()[i]) << " ";
+        // }
+        ck_tile::HostTensor<BDataType> b_shuffle_host = shuffle_b<GemmConfig>(b_k_n_dev);
+        // if constexpr(std::is_same_v<BDataType, ck_tile::pk_int4_t>){
+        //     permute_vectors_i4x4_b(b_shuffle_host);
+        // }
+        // for(int i = 0; i < 10; i++)
+        // {
+        //     auto float_value = ck_tile::pk_int4_t_to_fp32x2_t_signed_conversion(b_shuffle_host.data()[i]).x;
+        //     printf("  [%d] = %f\n", i, float_value);
+        //     //std::cout << std::hex << ck_tile::bit_cast<unsigned char >(b_shuffle_host.data()[i])<< " ";
+        // }
         // shuffled buffer B for device implementation
         b_k_n_dev_buf.ToDevice(b_shuffle_host.data());
     }

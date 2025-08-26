@@ -426,6 +426,7 @@ struct WeightPreshufflePipelineAGmemBGmemCRegV1
             // GEMM i
             block_flatmm(c_block_tile, a_warp_windows, b_warp_tensor);
 
+
             block_sync_lds();
 
             static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
@@ -540,7 +541,9 @@ struct WeightPreshufflePipelineAGmemBGmemCRegV1
             // GEMM num_loop - 1
             block_flatmm(c_block_tile, a_warp_windows, b_warp_tensor_2);
         }
-
+        if constexpr(std::is_same_v<BDataType, pk_int4_t>){
+              tile_elementwise_inout([](auto& c) { c = c * 16; }, c_block_tile);
+        }
         return c_block_tile;
     }
 

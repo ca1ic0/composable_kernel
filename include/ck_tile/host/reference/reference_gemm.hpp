@@ -156,7 +156,7 @@ CK_TILE_HOST void reference_gemm(const HostTensor<ADataType>& a_m_k,
             if constexpr(std::is_same_v<BDataType, pk_int4_t>)
             {
                 const pk_int4_t pk_val  = b_element_op(b_k_n(k, n));
-                const fp32x2_t fp32_val = pk_int4_t_to_fp32x2_t(pk_val);
+                const fp32x2_t fp32_val = pk_int4_t_to_fp32x2_t_signed_conversion(pk_val);
                 if(k % 2 == 1)
                     v_b = fp32_val.hi;
                 else
@@ -166,6 +166,7 @@ CK_TILE_HOST void reference_gemm(const HostTensor<ADataType>& a_m_k,
             {
                 v_b = ck_tile::type_convert<AccDataType>(b_element_op(b_k_n(k, n)));
             }
+            //printf("a(%lu,%lu) * b(%lu,%lu) = %f * %f\n", m, k, k, n, v_a, v_b);
             v_acc += v_a * v_b;
         }
 
