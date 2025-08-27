@@ -1085,6 +1085,18 @@ struct mfma_type<MfmaInstr::wmma_f32_16x16x16_f8f8_gfx12> : public mfma_type_gfx
     __device__ void run(const FloatA& a, const FloatB& b, FloatC& reg_c) const
     {
         intrin_wmma_f32_16x16x16_f8f8_w32_gfx12<MPerWmma, NPerWmma>::Run(a, b, reg_c);
+#if 0
+        //if (threadIdx.x == 127)
+        {
+        using uint32x2_t  = uint32_t __attribute__((ext_vector_type(2)));
+        uint32x2_t a0 = bit_cast<uint32x2_t>(a);
+        uint32x2_t b0 = bit_cast<uint32x2_t>(b);
+        float8_t c0 = bit_cast<float8_t>(reg_c);
+        printf("[%u]: a: %08x %08x b: %08x %08x c: %f %f %f %f %f %f %f %f \n", threadIdx.x, 
+            a0[0], a0[1], b0[0], b0[1],
+             c0[0], c0[1],c0[2], c0[3],c0[4], c0[5],c0[6], c0[7]);
+        }
+#endif
     }
 };
 

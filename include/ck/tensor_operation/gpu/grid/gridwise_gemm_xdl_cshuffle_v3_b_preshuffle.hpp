@@ -704,7 +704,6 @@ struct GridwiseGemm_xdl_cshuffle_v3_b_preshuffle
     __device__ static constexpr auto GetABlockDescriptor_AK0PerBlock_MPerBlock_AK1()
     {
         constexpr index_t MWave    = MPerBlock / (MXdlPerWave * MPerXdl);
-        constexpr index_t NWave    = NPerBlock / (NXdlPerWave * NPerXdl);
         constexpr index_t WaveSize = BlockSize / (MWave * NWave);
         // A matrix in LDS memory, dst of blockwise copy
         if constexpr(ABlockLdsExtraM)
