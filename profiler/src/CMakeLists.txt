@@ -146,7 +146,7 @@ list(APPEND DEVICE_INSTANCES device_column_to_image_instance)
 list(APPEND DEVICE_INSTANCES device_transpose_instance)
 list(APPEND DEVICE_INSTANCES device_permute_scale_instance)
 
-if(SUPPORTED_GPU_TARGETS MATCHES "gfx9" OR SUPPORTED_GPU_TARGETS MATCHES "gfx11" OR SUPPORTED_GPU_TARGETS MATCHES "gfx12")
+if(SUPPORTED_GPU_TARGETS MATCHES "gfx9" OR SUPPORTED_GPU_TARGETS MATCHES "gfx1[12]")
   if(DTYPES MATCHES "fp32" OR DTYPES MATCHES "fp64" OR NOT DEFINED DTYPES)
     list(APPEND DEVICE_INSTANCES device_contraction_bilinear_instance)
     list(APPEND DEVICE_INSTANCES device_contraction_scale_instance)
@@ -169,7 +169,7 @@ if(SUPPORTED_GPU_TARGETS MATCHES "gfx9" OR SUPPORTED_GPU_TARGETS MATCHES "gfx11"
   endif()
   list(APPEND DEVICE_INSTANCES device_batched_gemm_reduce_instance)
   list(APPEND DEVICE_INSTANCES device_gemm_multiply_add_instance)
-  if(SUPPORTED_GPU_TARGETS MATCHES "gfx9[45]")
+  if(SUPPORTED_GPU_TARGETS MATCHES "gfx9[45]" OR SUPPORTED_GPU_TARGETS MATCHES "gfx1[12]")
     list(APPEND DEVICE_INSTANCES device_gemm_multiply_multiply_instance)
     list(APPEND DEVICE_INSTANCES device_gemm_multiply_multiply_wp_instance)
     list(APPEND DEVICE_INSTANCES device_gemm_ab_scale_instance)
@@ -205,7 +205,7 @@ if(SUPPORTED_GPU_TARGETS MATCHES "gfx9" OR SUPPORTED_GPU_TARGETS MATCHES "gfx11"
   list(APPEND DEVICE_INSTANCES device_grouped_conv3d_fwd_bias_clamp_instance)
 endif()
 
-if((SUPPORTED_GPU_TARGETS MATCHES "gfx9" AND (DTYPES MATCHES "fp16" OR NOT DEFINED DTYPES)) OR
+if(((SUPPORTED_GPU_TARGETS MATCHES "gfx9" OR SUPPORTED_GPU_TARGETS MATCHES "gfx1[12]") AND (DTYPES MATCHES "fp16" OR NOT DEFINED DTYPES)) OR
    (SUPPORTED_GPU_TARGETS MATCHES "gfx1[12]" AND (DTYPES MATCHES "int8" OR NOT DEFINED DTYPES)))
   list(APPEND DEVICE_INSTANCES device_gemm_bilinear_instance)
 endif()
