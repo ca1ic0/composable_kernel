@@ -891,8 +891,6 @@ struct BlockFmhaBwdPipelineTrLoadDefaultPolicy
 
         constexpr auto dot_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
             dot_block_outer_dstr_encoding, typename WarpGemm::BWarpDstrEncoding{});
-        // CK_PRINT<typename WarpGemm::BWarpDstrEncoding>();
-        // CK_PRINT<decltype(dot_block_dstr_encode)>();
 
         return make_static_tile_distribution(
             typename InputTileDistributionTraits<

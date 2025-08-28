@@ -708,6 +708,70 @@ bool run(const ck_tile::ArgParser& arg_parser)
         // Assume bias is in [-1.f, 1.f] in original fp32
         ck_tile::FillUniformDistribution<BiasDataType>{-qscale_bias, qscale_bias, seed}(bias_host);
     }
+    else if(init_method == "qkv1")
+    {
+        ck_tile::FillNormalDistribution<QDataType>{1.f, 0.f, seed}(q_host);
+        ck_tile::FillNormalDistribution<KDataType>{1.f, 0.f, seed}(k_host);
+        ck_tile::FillNormalDistribution<KDataType>{1.f, 0.f, seed}(knew_host);
+        ck_tile::FillNormalDistribution<VDataType>{1.f, 0.f, seed}(v_host);
+        ck_tile::FillNormalDistribution<VDataType>{1.f, 0.f, seed}(vnew_host);
+        ck_tile::FillNormalDistribution<BiasDataType>{1.f, 0.f, seed}(bias_host);
+        printf("here\n");
+    }
+    else if(init_method == "qk1")
+    {
+        ck_tile::FillNormalDistribution<QDataType>{1.f, 0.f, seed}(q_host);
+        ck_tile::FillNormalDistribution<KDataType>{1.f, 0.f, seed}(k_host);
+        ck_tile::FillNormalDistribution<KDataType>{1.f, 0.f, seed}(knew_host);
+        ck_tile::FillNormalDistribution<VDataType>{0.f, 3.f, seed}(v_host);
+        ck_tile::FillNormalDistribution<VDataType>{0.f, 3.f, seed}(vnew_host);
+        ck_tile::FillNormalDistribution<BiasDataType>{1.f, 0.f, seed}(bias_host);
+    }
+    else if(init_method == "kv1")
+    {
+        ck_tile::FillNormalDistribution<QDataType>{0.f, 3.f, seed}(q_host);
+        ck_tile::FillNormalDistribution<KDataType>{1.f, 0.f, seed}(k_host);
+        ck_tile::FillNormalDistribution<KDataType>{1.f, 0.f, seed}(knew_host);
+        ck_tile::FillNormalDistribution<VDataType>{1.f, 0.f, seed}(v_host);
+        ck_tile::FillNormalDistribution<VDataType>{1.f, 0.f, seed}(vnew_host);
+        ck_tile::FillNormalDistribution<BiasDataType>{1.f, 0.f, seed}(bias_host);
+    }
+    else if(init_method == "qv1")
+    {
+        ck_tile::FillNormalDistribution<QDataType>{1.f, 0.f, seed}(q_host);
+        ck_tile::FillNormalDistribution<KDataType>{0.f, 3.f, seed}(k_host);
+        ck_tile::FillNormalDistribution<KDataType>{0.f, 3.f, seed}(knew_host);
+        ck_tile::FillNormalDistribution<VDataType>{1.f, 0.f, seed}(v_host);
+        ck_tile::FillNormalDistribution<VDataType>{1.f, 0.f, seed}(vnew_host);
+        ck_tile::FillNormalDistribution<BiasDataType>{1.f, 0.f, seed}(bias_host);
+    }
+    else if(init_method == "q1")
+    {
+        ck_tile::FillNormalDistribution<QDataType>{1.f, 0.f, seed}(q_host);
+        ck_tile::FillNormalDistribution<KDataType>{0.f, 3.f, seed}(k_host);
+        ck_tile::FillNormalDistribution<KDataType>{0.f, 3.f, seed}(knew_host);
+        ck_tile::FillNormalDistribution<VDataType>{0.f, 3.f, seed}(v_host);
+        ck_tile::FillNormalDistribution<VDataType>{0.f, 3.f, seed}(vnew_host);
+        ck_tile::FillNormalDistribution<BiasDataType>{1.f, 0.f, seed}(bias_host);
+    }
+    else if(init_method == "k1")
+    {
+        ck_tile::FillNormalDistribution<QDataType>{0.f, 3.f, seed}(q_host);
+        ck_tile::FillNormalDistribution<KDataType>{1.f, 0.f, seed}(k_host);
+        ck_tile::FillNormalDistribution<KDataType>{1.f, 0.f, seed}(knew_host);
+        ck_tile::FillNormalDistribution<VDataType>{0.f, 3.f, seed}(v_host);
+        ck_tile::FillNormalDistribution<VDataType>{0.f, 3.f, seed}(vnew_host);
+        ck_tile::FillNormalDistribution<BiasDataType>{1.f, 0.f, seed}(bias_host);
+    }
+    else if(init_method == "v1")
+    {
+        ck_tile::FillNormalDistribution<QDataType>{0.f, 3.f, seed}(q_host);
+        ck_tile::FillNormalDistribution<KDataType>{0.f, 3.f, seed}(k_host);
+        ck_tile::FillNormalDistribution<KDataType>{0.f, 3.f, seed}(knew_host);
+        ck_tile::FillNormalDistribution<VDataType>{1.f, 0.f, seed}(v_host);
+        ck_tile::FillNormalDistribution<VDataType>{1.f, 0.f, seed}(vnew_host);
+        ck_tile::FillNormalDistribution<BiasDataType>{1.f, 0.f, seed}(bias_host);
+    }
     if(bias.type == bias_enum::alibi)
     {
         auto slopes = ck_tile::get_alibi_slopes<SaccDataType>(nhead);
@@ -728,6 +792,24 @@ bool run(const ck_tile::ArgParser& arg_parser)
     }
     iota_shuffle(block_table_host.begin(), block_table_host.end(), 0);
     iota_shuffle(cache_batch_idx_host.begin(), cache_batch_idx_host.end(), 0);
+
+    // printf("HostK\n");
+    // for(int i=0; i<shape_seqlen_k; i++){
+    //     for(int j=0; j<hdim_q; j++){
+    //         if(i>63) k_host(0, 0, i, j) = ck_tile::type_convert<KDataType>(.0f);
+    //         printf("%8.3f ", ck_tile::type_convert<float>(k_host(0, 0, i, j)));
+    //     }
+    //     printf("\n");
+    // }
+
+    // printf("HostV\n");
+    // for(int j=0; j<hdim_v; j++){
+    //     for(int i=0; i<shape_seqlen_k; i++){
+    //         if(i>63) v_host(0, 0, i, j) = ck_tile::type_convert<VDataType>(.0f);
+    //         printf("%8.3f ", ck_tile::type_convert<float>(v_host(0, 0, i, j)));
+    //     }
+    //     printf("\n");
+    // }
 
     ck_tile::DeviceMem q_buf(q_host.get_element_space_size_in_bytes());
     ck_tile::DeviceMem k_buf(k_host.get_element_space_size_in_bytes());

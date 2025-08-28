@@ -101,7 +101,7 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
             }
             else if constexpr(kQKHeaddim <= 64)
             {
-                return 3;
+                return 2;
             }
             else if constexpr(kQKHeaddim <= 128)
             {
@@ -771,7 +771,7 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
                            static_cast<KDataType* __restrict__>(smem_ptrk0),
                            Policy::template MakeKLdsBlockDescriptor<Problem, true>()),
                        make_tensor_view<address_space_enum::lds>(
-                           static_cast<KDataType* __restrict__>(smem_ptrk0),
+                           static_cast<KDataType* __restrict__>(smem_ptrk1),
                            Policy::template MakeKLdsBlockDescriptor<Problem, true>()));
 
         auto k_lds_read_views =
@@ -848,7 +848,9 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
                 Policy::template MakePRegTileDistribution<Problem>())) p_tile;
         };
 
-        statically_indexed_array<sp_compute_type, 2> sp_tile;
+        auto sp_tile = make_tuple(sp_compute_type{}, // Sacc, P, for ping-pong
+                                  sp_compute_type{}  // Sacc, P, for ping-pong
+        );
 
         // We want K and V could reuse the same register buffer.
         union kv_tile_type
@@ -883,12 +885,12 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
         async_load_tile(k_lds_write_windows.at(I0), k_dram_window);
         async_load_tile(v_lds_write_windows.at(I0), v_dram_window);
 
-        gemm_0(sp_tile(I0).sp_compute_tile, q_tile, kv_tile.k_tile);
+        sp_tile.at(I0).sp_compute_tile = gemm_0(q_tile, kv_tile.k_tile);
 
         // ----------------------------- SoftMax@0----------------------------------
         // RowMax
         auto m_local =
-            block_tile_reduce<SMPLComputeDataType>(sp_tile(I0).sp_compute_tile,
+            block_tile_reduce<SMPLComputeDataType>(sp_tile.at(I0).sp_compute_tile,
                                                    sequence<1>{},
                                                    f_max,
                                                    -numeric<SMPLComputeDataType>::infinity());
@@ -906,8 +908,14 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
             sweep_tile_span(s_spans[I1], [&](auto idx1) {
                 constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-                sp_tile(I0).sp_compute_tile(i_j_idx) =
-                    exp2(scale_s * sp_tile(I0).sp_compute_tile[i_j_idx] - row_max);
+                sp_tile.at(I0).sp_compute_tile(i_j_idx) =
+                    scale_s * sp_tile.at(I0).sp_compute_tile[i_j_idx] - row_max;
+            });
+            sweep_tile_span(s_spans[I1], [&](auto idx1) {
+                constexpr auto i_j_idx = make_tuple(idx0, idx1);
+
+                sp_tile.at(I0).sp_compute_tile(i_j_idx) =
+                    exp2(sp_tile.at(I0).sp_compute_tile[i_j_idx]);
             });
         });
 
@@ -933,28 +941,21 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
 
         __builtin_amdgcn_sched_barrier(0);
 
-        auto mainloop = [&](index_t BufIdx) {
-            // Double Register buffer Index for Gemm0 Result
-            const bool is_even = BufIdx%2;
-            auto sp_acc_tile   = is_even? sp_tile(I1):sp_tile(I0) ;
-            auto sp_reduce_tile = is_even? sp_tile(I0):sp_tile(I1);
-
-            // Double Lds buffer Index for K data
-            auto k_lds_read_window  = is_even? k_lds_read_windows.at(I1):k_lds_read_windows.at(I0);
-            auto k_lds_write_window = is_even? k_lds_write_windows.at(I0):k_lds_write_windows.at(I1);
-
-            // Double Lds buffer Index for V data
-            auto v_lds_read_window  = is_even? v_lds_read_windows.at(I0):v_lds_read_windows.at(I1);
-            auto v_lds_write_window = is_even? v_lds_write_windows.at(I0):v_lds_write_windows.at(I1);
-
+        auto mainloop = [&](auto acc_regidx) {
             // ----------------------------- Gemm0@i+1---------------------------------------
-            clear_tile(sp_acc_tile.sp_compute_tile);
-            gemm_0(sp_acc_tile.sp_compute_tile, q_tile, kv_tile.k_tile);
+            sp_tile.at(acc_regidx).sp_compute_tile = gemm_0(q_tile, kv_tile.k_tile);
 
             auto rowsum_p = block_tile_reduce<SMPLComputeDataType>(
-                sp_reduce_tile.sp_compute_tile, sequence<1>{}, f_sum, SMPLComputeDataType{0});
+                sp_tile.at(number<1 - acc_regidx>{}).sp_compute_tile,
+                sequence<1>{},
+                f_sum,
+                SMPLComputeDataType{0});
 
             block_tile_reduce_sync(rowsum_p, f_sum, bool_constant<false>{}, bool_constant<false>{});
+
+            sp_tile.at(number<1 - acc_regidx>{}).p_tile.get_thread_buffer() =
+                cast_tile<PDataType>(sp_tile.at(number<1 - acc_regidx>{}).sp_compute_tile)
+                    .get_thread_buffer();
 
             // Update Oacc
             sweep_tile_span(o_spans[I0], [&](auto idx0) {
@@ -968,32 +969,27 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
                     o_acc(i_j_idx) *= tmp;
                 });
             });
-            sp_reduce_tile.p_tile.get_thread_buffer() =
-                cast_tile<PDataType>(sp_reduce_tile.sp_compute_tile).get_thread_buffer();
 
             move_tile_window(k_dram_window, {kN0, 0});
-            // block_sync_lds<k_lds_insts+v_lds_insts>();
-            async_load_tile(k_lds_write_window, k_dram_window);
-            
-            __builtin_amdgcn_sched_barrier(0);
+            async_load_tile(k_lds_write_windows.at(number<1 - acc_regidx>{}), k_dram_window);
+
             block_sync_lds_direct_load<k_vmem_insts + v_vmem_insts>();
-            kv_tile.v_tile = load_tile_transpose(v_lds_read_window);
+            kv_tile.v_tile = load_tile_transpose(v_lds_read_windows.at(number<1 - acc_regidx>{}));
+            __builtin_amdgcn_sched_barrier(0);
 
             // ----------------------------- Gemm1@i-----------------------------------------
-            gemm_1(o_acc, sp_reduce_tile.p_tile, kv_tile.v_tile);
+            gemm_1(o_acc, sp_tile.at(number<1 - acc_regidx>{}).p_tile, kv_tile.v_tile);
 
             move_tile_window(v_dram_window, {kN0, 0});
-            // block_sync_lds<k_lds_insts+v_lds_insts>();
-            async_load_tile(v_lds_write_window, v_dram_window);
-            
-            block_sync_lds_direct_load<k_vmem_insts + v_vmem_insts>();
+            block_sync_lds<0>();
+            async_load_tile(v_lds_write_windows.at(number<1 - acc_regidx>{}), v_dram_window);
 
             // RowMax
-            m_local = block_tile_reduce<SMPLComputeDataType>(
-                sp_acc_tile.sp_compute_tile,
-                sequence<1>{},
-                f_max,
-                -numeric<SMPLComputeDataType>::infinity());
+            m_local =
+                block_tile_reduce<SMPLComputeDataType>(sp_tile.at(acc_regidx).sp_compute_tile,
+                                                       sequence<1>{},
+                                                       f_max,
+                                                       -numeric<SMPLComputeDataType>::infinity());
 
             block_tile_reduce_sync(m_local, f_max, bool_constant<false>{}, bool_constant<false>{});
 
@@ -1009,19 +1005,31 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
                 sweep_tile_span(s_spans[I1], [&](auto idx1) {
                     constexpr auto i_j_idx = make_tuple(idx0, idx1);
 
-                    sp_acc_tile.sp_compute_tile(i_j_idx) =
-                        exp2(scale_s * sp_acc_tile.sp_compute_tile[i_j_idx] -
-                             row_max);
+                    sp_tile.at(acc_regidx).sp_compute_tile(i_j_idx) =
+                        scale_s * sp_tile.at(acc_regidx).sp_compute_tile[i_j_idx] - row_max;
+                });
+
+                sweep_tile_span(s_spans[I1], [&](auto idx1) {
+                    constexpr auto i_j_idx = make_tuple(idx0, idx1);
+
+                    sp_tile.at(acc_regidx).sp_compute_tile(i_j_idx) =
+                        exp2(sp_tile.at(acc_regidx).sp_compute_tile[i_j_idx]);
                 });
             });
-            
-            __builtin_amdgcn_sched_barrier(0);
-            kv_tile.k_tile = load_tile(k_lds_read_window);
+           
+            block_sync_lds_direct_load<k_vmem_insts + v_vmem_insts>();
+            kv_tile.k_tile = load_tile(k_lds_read_windows.at(acc_regidx));
+             __builtin_amdgcn_sched_barrier(0);
         };
 
         do
         {
-            mainloop(i_total_loops);
+            // if(i_total_loops % 2 == 0)
+                mainloop(I1);
+                i_total_loops+=1;
+            // if(i_total_loops % 2 == 1)
+                mainloop(I0);
+
             i_total_loops += 1;
         } while(i_total_loops < num_total_loop);
 
@@ -1032,6 +1040,11 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
         // // Double Lds buffer Index for V data
         // auto v_lds_read_window  = is_even? v_lds_read_windows.at(I0):v_lds_read_windows.at(I1);
         // // // ----------------------------- SoftMaxPartB@Last----------------------------------
+        // auto rowsum_p = block_tile_reduce<SMPLComputeDataType>(
+        //         sp_reduce_tile.sp_compute_tile, sequence<1>{}, f_sum, SMPLComputeDataType{0});
+
+        // block_tile_reduce_sync(rowsum_p, f_sum, bool_constant<false>{}, bool_constant<false>{});
+
         // // Update Oacc
         // sweep_tile_span(o_spans[I0], [&](auto idx0) {
         //     constexpr auto i_idx = make_tuple(idx0);
@@ -1051,7 +1064,6 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
         // auto v_tile = load_tile_transpose(v_lds_read_window);
 
         // // ----------------------------- Gemm1@Last-----------------------------------------
-        // block_sync_lds<0>();
         // gemm_1(o_acc, sp_reduce_tile.p_tile, v_tile);
 
         if constexpr(kStoreLSE)

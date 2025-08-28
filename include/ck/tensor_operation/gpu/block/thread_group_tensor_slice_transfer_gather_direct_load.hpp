@@ -216,9 +216,6 @@ struct ThreadGroupTensorSliceTransfer_Gather_DirectLoad
             return idx;
         }();
 
-        // CK_PRINT<decltype(adjusted_src_origin_idx)>();
-        // CK_PRINT<decltype(src_slice_origin_idx)>();
-
         src_coord_        = make_tensor_coordinate(src_desc, adjusted_src_origin_idx);
         src_slice_origin_ = adjusted_src_origin_idx;
     }

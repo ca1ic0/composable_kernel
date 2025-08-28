@@ -28,8 +28,9 @@ string(REPLACE ";" "," FMHA_FWD_APIS "${FMHA_FWD_ENABLE_APIS}")
 set(FMHA_FWD_CODE_GEN_COMMON_ARGS
   ${CMAKE_CURRENT_LIST_DIR}/generate.py
   --api ${FMHA_FWD_APIS}
-  --optdim 32,64,128,256
-  --filter fmha_fwd_d128_bf16_batch_b128x64x128x128x64x128_r4x1x1_r4x1x1_w32x32x16_w32x32x16_qr_async_trload_vr_npad_nlogits_nbias_nmask_nlse_ndropout_nskip_nsquant_trload
+  # --optdim 32,64,128,256
+  --optdim 128
+  # --filter fmha_fwd_d128_bf16_batch_b128x32x128x128x32x128_r4x1x1_r4x1x1_w32x32x16_w32x32x16_qr_async_trload_vr_npad_nlogits_nbias_nmask_nlse_ndropout_nskip_nsquant_trload
 )
 set(FMHA_BWD_CODE_GEN_COMMON_ARGS
   ${CMAKE_CURRENT_LIST_DIR}/generate.py
