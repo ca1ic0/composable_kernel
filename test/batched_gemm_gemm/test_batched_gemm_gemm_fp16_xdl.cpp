@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2023, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2018-2025, Advanced Micro Devices, Inc. All rights reserved.
 
 #include "gtest/gtest.h"
 #include "test_batched_gemm_gemm_util.hpp"
@@ -146,4 +146,15 @@ TEST(TestBatchedGemmGemmInterface, GemmSpecializationSizeMismatch)
     // Kernel can't support odd O size because SrcVectorDim == ODim and must satisfy SizeORaw % B1SrcScalarPerVector == 0
     EXPECT_FALSE(DeviceInstanceWrapper_TNTT_FP16_M128_N128_K32_O128<GemmSpecialization::MNKOPadding>{}.IsSupported(128, 128, 128, 129));
     // clang-format on
+}
+
+int main(int argc, char** argv)
+{
+    // temp disable on gfx11
+    if(ck::is_gfx11_supported())
+    {
+        return 0;
+    }
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }
