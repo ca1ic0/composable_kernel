@@ -47,7 +47,7 @@ __launch_bounds__(CK_MAX_THREAD_PER_BLOCK, MinimumOccupancy)
     // __attribute__((amdgpu_waves_per_eu(1, 1)))
     kernel_moe_mxgemm(typename GridwiseGemm::Argument karg)
 {
-#if defined(__gfx9__) || defined(__gfx11__) || defined(__gfx12__)
+#if defined(__gfx9__)
     if constexpr(GridwiseGemm::template IsValidCompilationParameter<CGlobalMemoryDataOperation>())
     {
         __shared__ char p_shared[GridwiseGemm::GetSharedMemoryNumberOfByte()];
@@ -87,7 +87,7 @@ __launch_bounds__(CK_MAX_THREAD_PER_BLOCK, MinimumOccupancy)
     // __attribute__((amdgpu_waves_per_eu(1, 1)))
     kernel_moe_mxgemm_2lds(typename GridwiseGemm::Argument karg)
 {
-#if defined(__gfx9__) || defined(__gfx11__) || defined(__gfx12__)
+#if defined(__gfx9__)
     if constexpr(GridwiseGemm::template IsValidCompilationParameter<CGlobalMemoryDataOperation>())
     {
         __shared__ char p_shared_0[GridwiseGemm::GetSharedMemoryNumberOfByte()];
@@ -276,11 +276,11 @@ struct GridwiseMoeGemmMX_BPreshuffle
         return math::integer_least_multiple(N, NPerBlock);
     }
 
-    __host__ static auto CalculateBN0Shuffled(index_t N)
+    __host__ __device__ static auto CalculateBN0Shuffled(index_t N)
     {
         return math::integer_divide_ceil(N, NLane);
     }
-    __host__ static auto CalculateBK0Shuffled(index_t K)
+    __host__ __device__ static auto CalculateBK0Shuffled(index_t K)
     {
         return math::integer_divide_ceil(K, KLane * KPack);
     }
@@ -873,7 +873,6 @@ struct GridwiseMoeGemmMX_BPreshuffle
     __device__ static constexpr auto GetABlockDescriptor_AK0PerBlock_MPerBlock_AK1()
     {
         constexpr index_t MWave    = MPerBlock / (MXdlPerWave * MPerXdl);
-        constexpr index_t NWave    = NPerBlock / (NXdlPerWave * NPerXdl);
         constexpr index_t WaveSize = BlockSize / (MWave * NWave);
 
         // A matrix in LDS memory, dst of blockwise copy
