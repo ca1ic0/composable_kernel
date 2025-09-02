@@ -576,8 +576,7 @@ struct GridwiseBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
                                const CDE1ElementwiseOperation& cde1_element_op,
                                const A0GridDesc_AK0_M_AK1& a0_grid_desc_ak0_m_ak1,
                                const B0GridDesc_BK0_N_BK1& b0_grid_desc_bk0_n_bk1,
-                               const D0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5&
-                                   d0s_griddesc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5,
+                               const D0sGridDesc_M_N& d0s_griddesc_m_n,
                                const B1GridDesc_BK0_N_BK1& b1_grid_desc_bk0_n_bk1,
                                const D1sGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock&
                                    d1s_grid_desc_mblock_mperblock_nblock_nperblock,
@@ -585,6 +584,8 @@ struct GridwiseBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
                                    e1_grid_desc_mblock_mperblock_nblock_nperblock,
                                const Block2E1TileMap& block_2_e1tile_map)
     {
+        const auto d0s_griddesc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5 =
+            MakeD0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5(d0s_griddesc_m_n);
         const auto a0_grid_buf = make_dynamic_buffer<AddressSpaceEnum::Global>(
             p_a0_grid, a0_grid_desc_ak0_m_ak1.GetElementSpaceSize());
         const auto b0_grid_buf = make_dynamic_buffer<AddressSpaceEnum::Global>(
@@ -873,15 +874,29 @@ struct GridwiseBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
         constexpr auto A1ThreadSlice_K0_M_K1 = make_tuple(
             Number<Gemm1KPerBlock / n4 / Acc0N3>{}, Number<m0 * m1 * m2>{}, Number<n4>{});
 
-        constexpr auto A1ThreadSliceK0        = A1ThreadSlice_K0_M_K1[I0];
-        constexpr auto A1ThreadSliceM         = A1ThreadSlice_K0_M_K1[I1];
-        constexpr auto A1ThreadSliceK1        = A1ThreadSlice_K0_M_K1[I2];
+        constexpr auto A1ThreadSliceK0 = A1ThreadSlice_K0_M_K1[I0];
+        constexpr auto A1ThreadSliceM  = A1ThreadSlice_K0_M_K1[I1];
+        constexpr auto A1ThreadSliceK1 = A1ThreadSlice_K0_M_K1[I2];
+#if defined(__gfx11__)
+        constexpr auto a1_thread_desc_k0_m_k1 = make_naive_tensor_descriptor_packed(
+            make_tuple(A1ThreadSliceK0, A1ThreadSliceM, Number<A1ThreadSliceK1 * 2>{}));
+        auto a1_blockwise_copy = ThreadwiseTensorSliceTransfer_StaticToStatic_InterRow<
+            Acc0DataType,
+            A0B0B1DataType,
+            decltype(acc0_thread_desc_k0_m_k1),
+            decltype(a1_thread_desc_k0_m_k1),
+            tensor_operation::element_wise::PassThrough,
+            Sequence<A1ThreadSliceK0, A1ThreadSliceM, A1ThreadSliceK1>,
+            Sequence<1, 0, 2>,
+            2,
+            n4,
+            0x76543210,
+            0xfedcba98,
+            true>{make_tuple(0, 0, 0)};
+#else
         constexpr auto a1_thread_desc_k0_m_k1 = make_naive_tensor_descriptor(
             A1ThreadSlice_K0_M_K1,
             make_tuple(A1ThreadSliceM * A1ThreadSliceK1, A1ThreadSliceK1, I1));
-
-        // B1 matrix in LDS memory, dst of blockwise copy
-        constexpr auto b1_block_desc_bk0_n_bk1 = GetB1BlockDescriptor_BK0PerBlock_NPerBlock_BK1();
 
         // A1 matrix blockwise copy
         auto a1_blockwise_copy = ThreadwiseTensorSliceTransfer_StaticToStatic<
@@ -894,7 +909,10 @@ struct GridwiseBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
             Sequence<1, 0, 2>,
             2,
             n4>{tensor_operation::element_wise::PassThrough{}};
+#endif
 
+        // B1 matrix in LDS memory, dst of blockwise copy
+        constexpr auto b1_block_desc_bk0_n_bk1 = GetB1BlockDescriptor_BK0PerBlock_NPerBlock_BK1();
         // B1 matrix blockwise copy
         auto b1_blockwise_copy =
             ThreadGroupTensorSliceTransfer_v4r1<ThisThreadBlock,
@@ -942,10 +960,13 @@ struct GridwiseBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
         // with 'group_size' amount of contiguous elements. Having Gemm1KPack greater than A1K1 will
         // cause mismatch in summation index for example c[0:7] = a1[[0:3, 8:11]] * b1[0:7].
         // therefore we may just as well assign Gemm1KPack = group_size
-
+#if defined(__gfx11__)
+        constexpr index_t Gemm1KPack =
+            MfmaSelector<A0B0B1DataType, Gemm0MPerXdl, Gemm0NPerXdl>::selected_mfma.group_size * 2;
+#else
         constexpr index_t Gemm1KPack =
             MfmaSelector<A0B0B1DataType, Gemm0MPerXdl, Gemm0NPerXdl>::selected_mfma.group_size;
-
+#endif
         auto blockwise_gemm1 = BlockwiseGemmXdlops_v2<
             BlockSize,
             A0B0B1DataType,
@@ -1036,7 +1057,7 @@ struct GridwiseBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
             else
             {
                 static_for<0, acc0_thread_buf.Size(), 1>{}(
-                    [&](auto i) { cde0_element_op(acc_thread_buf(i), acc0_thread_buf[i]); });
+                    [&](auto i) { cde0_element_op(acc0_thread_buf(i), acc0_thread_buf[i]); });
             }
             // gemm1
             {
