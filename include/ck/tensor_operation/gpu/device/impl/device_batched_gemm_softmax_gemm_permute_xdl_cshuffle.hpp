@@ -36,7 +36,7 @@ template <typename GridwiseGemm,
           typename BGridDesc_BK0_N_BK1,
           typename B1GridDesc_BK0_N_BK1,
           typename C1GridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock,
-          typename D0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5,
+          typename D0sGridDesc_M_N,
           typename Block2CTileMap,
           typename ComputeBasePtrOfStridedBatch,
           typename C0MatrixMask,
@@ -61,14 +61,13 @@ __launch_bounds__(CK_MAX_THREAD_PER_BLOCK, CK_MIN_BLOCK_PER_CU)
         const B1GridDesc_BK0_N_BK1 b1_grid_desc_bk0_n_bk1,
         const C1GridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock
             c1_grid_desc_mblock_mperblock_nblock_nperblock,
-        const D0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5
-            d0s_griddesc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5,
+        const D0sGridDesc_M_N d0s_griddesc_m_n,
         const Block2CTileMap block_2_ctile_map,
         const index_t batch_count,
         const ComputeBasePtrOfStridedBatch compute_base_ptr_of_batch,
         const C0MatrixMask c0_matrix_mask)
 {
-#if defined(__gfx9__) || defined(__gfx12__)
+#if defined(__gfx9__) || defined(__gfx11__) || defined(__gfx12__)
     if constexpr(GridwiseGemm::template IsValidCompilationParameter<>())
     {
         __shared__ char p_shared[GridwiseGemm::GetSharedMemoryNumberOfByte()];
@@ -108,7 +107,7 @@ __launch_bounds__(CK_MAX_THREAD_PER_BLOCK, CK_MIN_BLOCK_PER_CU)
             b_grid_desc_bk0_n_bk1,
             b1_grid_desc_bk0_n_bk1,
             c1_grid_desc_mblock_mperblock_nblock_nperblock,
-            d0s_griddesc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5,
+            d0s_griddesc_m_n,
             block_2_ctile_map,
             c0_matrix_mask);
     }
@@ -127,7 +126,7 @@ __launch_bounds__(CK_MAX_THREAD_PER_BLOCK, CK_MIN_BLOCK_PER_CU)
     ignore = b_grid_desc_bk0_n_bk1;
     ignore = b1_grid_desc_bk0_n_bk1;
     ignore = c1_grid_desc_mblock_mperblock_nblock_nperblock;
-    ignore = d0s_griddesc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5;
+    ignore = d0s_griddesc_m_n;
     ignore = block_2_ctile_map;
     ignore = batch_count;
     ignore = compute_base_ptr_of_batch;
@@ -499,6 +498,8 @@ struct DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle
                   b1_gs_gemm1ns_gemm1ks_lengths, b1_gs_gemm1ns_gemm1ks_strides)},
               c1_grid_desc_m_n_{Transform::MakeCGridDescriptor_M_N(c_gs_ms_gemm1ns_lengths,
                                                                    c_gs_ms_gemm1ns_strides)},
+              d0s_grid_desc_m_n_{DeviceOp::MakeD0sGridDescriptor_M_N(acc0_biases_gs_ms_ns_lengths,
+                                                                     acc0_biases_gs_ms_ns_strides)},
               a_grid_desc_g_m_k_{
                   Transform::MakeAGridDescriptor_G_M_K(a_gs_ms_ks_lengths, a_gs_ms_ks_strides)},
               b_grid_desc_g_n_k_{
@@ -510,7 +511,6 @@ struct DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle
               d0s_grid_desc_g_m_n_{DeviceOp::MakeD0sGridDescriptor_G_M_N(
                   acc0_biases_gs_ms_ns_lengths, acc0_biases_gs_ms_ns_strides)},
               c1_grid_desc_mblock_mperblock_nblock_nperblock_{},
-              d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_{},
               block_2_ctile_map_{GridwiseGemm64::MakeDefaultBlock2CTileMap(c1_grid_desc_m_n_)},
               a_element_op_{a_element_op},
               b_element_op_{b_element_op},
@@ -565,12 +565,6 @@ struct DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle
                         c1_grid_desc_mblock_mperblock_nblock_nperblock_ =
                             GridwiseGemm64::MakeC1GridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
                                 c1_grid_desc_m_n_);
-
-                        D0sGridDesc_M_N d0s_grid_desc_m_n{DeviceOp::MakeD0sGridDescriptor_M_N(
-                            acc0_biases_gs_ms_ns_lengths, acc0_biases_gs_ms_ns_strides)};
-                        d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_ =
-                            GridwiseGemm64::MakeD0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5(
-                                d0s_grid_desc_m_n);
                     }
                 }
             }
@@ -587,12 +581,6 @@ struct DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle
                         c1_grid_desc_mblock_mperblock_nblock_nperblock_ =
                             GridwiseGemm32::MakeC1GridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
                                 c1_grid_desc_m_n_);
-
-                        D0sGridDesc_M_N d0s_grid_desc_m_n{DeviceOp::MakeD0sGridDescriptor_M_N(
-                            acc0_biases_gs_ms_ns_lengths, acc0_biases_gs_ms_ns_strides)};
-                        d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_ =
-                            GridwiseGemm32::MakeD0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5(
-                                d0s_grid_desc_m_n);
                     }
                 }
             }
@@ -626,6 +614,7 @@ struct DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle
         BGridDesc_BK0_N_BK1 b_grid_desc_bk0_n_bk1_;
         B1GridDesc_BK0_N_BK1 b1_grid_desc_bk0_n_bk1_;
         C1GridDesc_M_N c1_grid_desc_m_n_;
+        D0sGridDesc_M_N d0s_grid_desc_m_n_;
         AGridDesc_G_M_K a_grid_desc_g_m_k_;
         BGridDesc_G_N_K b_grid_desc_g_n_k_;
         B1GridDesc_G_N_K b1_grid_desc_g_n_k_;
@@ -634,8 +623,6 @@ struct DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle
 
         typename GridwiseGemm64::C1GridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock
             c1_grid_desc_mblock_mperblock_nblock_nperblock_;
-        typename GridwiseGemm64::D0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5
-            d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_;
 
         // block-to-c-tile map
         typename GridwiseGemm64::DefaultBlock2CTileMap block_2_ctile_map_;
@@ -699,7 +686,7 @@ struct DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle
                     DeviceOp::BGridDesc_BK0_N_BK1,
                     DeviceOp::B1GridDesc_BK0_N_BK1,
                     typename GridwiseGemm::C1GridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock,
-                    typename GridwiseGemm::D0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5,
+                    D0sGridDesc_M_N,
                     typename GridwiseGemm::DefaultBlock2CTileMap,
                     ComputeBasePtrOfStridedBatch,
                     C0MatrixMask,
@@ -724,7 +711,7 @@ struct DeviceBatchedGemmSoftmaxGemmPermute_Xdl_CShuffle
                                               arg.b_grid_desc_bk0_n_bk1_,
                                               arg.b1_grid_desc_bk0_n_bk1_,
                                               arg.c1_grid_desc_mblock_mperblock_nblock_nperblock_,
-                                              arg.d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_,
+                                              arg.d0s_grid_desc_m_n_,
                                               arg.block_2_ctile_map_,
                                               arg.batch_count_,
                                               arg.compute_base_ptr_of_batch_,

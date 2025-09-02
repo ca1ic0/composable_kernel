@@ -33,7 +33,7 @@ template <typename GridwiseGemm,
           typename CDE1ElementwiseOperation,
           typename A0GridDesc_AK0_M_AK1,
           typename B0GridDesc_BK0_N_BK1,
-          typename D0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5,
+          typename D0sGridDesc_M_N,
           typename B1GridDesc_BK0_N_BK1,
           typename D1sGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock,
           typename E1GridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock,
@@ -58,8 +58,7 @@ __launch_bounds__(CK_MAX_THREAD_PER_BLOCK, CK_MIN_BLOCK_PER_CU)
         const CDE1ElementwiseOperation cde1_element_op,
         const A0GridDesc_AK0_M_AK1 a0_grid_desc_ak0_m_ak1,
         const B0GridDesc_BK0_N_BK1 b0_grid_desc_bk0_n_bk1,
-        const D0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5
-            d0s_griddesc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5,
+        const D0sGridDesc_M_N d0s_griddesc_m_n,
         const B1GridDesc_BK0_N_BK1 b1_grid_desc_bk0_n_bk1,
         const D1sGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock
             d1s_grid_desc_mblock_mperblock_nblock_nperblock,
@@ -114,7 +113,7 @@ __launch_bounds__(CK_MAX_THREAD_PER_BLOCK, CK_MIN_BLOCK_PER_CU)
             cde1_element_op,
             a0_grid_desc_ak0_m_ak1,
             b0_grid_desc_bk0_n_bk1,
-            d0s_griddesc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5,
+            d0s_griddesc_m_n,
             b1_grid_desc_bk0_n_bk1,
             d1s_grid_desc_mblock_mperblock_nblock_nperblock,
             e1_grid_desc_mblock_mperblock_nblock_nperblock,
@@ -134,7 +133,7 @@ __launch_bounds__(CK_MAX_THREAD_PER_BLOCK, CK_MIN_BLOCK_PER_CU)
     ignore = cde1_element_op;
     ignore = a0_grid_desc_ak0_m_ak1;
     ignore = b0_grid_desc_bk0_n_bk1;
-    ignore = d0s_griddesc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5;
+    ignore = d0s_griddesc_m_n;
     ignore = b1_grid_desc_bk0_n_bk1;
     ignore = d1s_grid_desc_mblock_mperblock_nblock_nperblock;
     ignore = e1_grid_desc_mblock_mperblock_nblock_nperblock;
@@ -592,7 +591,6 @@ struct DeviceBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
                   GridwiseGemm64::MakeDefaultA0GridDescriptor_AK0_M_AK1(a0_grid_desc_m_k_)},
               b0_grid_desc_bk0_n_bk1_{
                   GridwiseGemm64::MakeDefaultB0GridDescriptor_BK0_N_BK1(b0_grid_desc_n_k_)},
-              d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_{},
               b1_grid_desc_bk0_n_bk1_{
                   GridwiseGemm64::MakeDefaultB1GridDescriptor_BK0_N_BK1(b1_grid_desc_n_k_)},
               d1s_grid_desc_mblock_mperblock_nblock_nperblock_{},
@@ -621,18 +619,6 @@ struct DeviceBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
                           << ", " << d0s_grid_desc_m_n_[I0].GetLength(I1) << "}" << std::endl;
                 std::cout << "b1_grid_desc_n_k_{" << b1_grid_desc_n_k_.GetLength(I0) << ", "
                           << b1_grid_desc_n_k_.GetLength(I1) << "}" << std::endl;
-                std::cout << "d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_{"
-                          << d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_[I0].GetLength(I0) << ", "
-                          << d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_[I0].GetLength(I1) << ", "
-                          << d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_[I0].GetLength(I2) << ", "
-                          << d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_[I0].GetLength(I3) << ", "
-                          << d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_[I0].GetLength(I4) << ", "
-                          << d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_[I0].GetLength(I5) << ", "
-                          << d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_[I0].GetLength(I6) << ", "
-                          << d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_[I0].GetLength(I7) << ", "
-                          << d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_[I0].GetLength(I8) << ", "
-                          << d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_[I0].GetLength(I9) << "}"
-                          << std::endl;
                 std::cout << "e1_grid_desc_m_n_{" << e1_grid_desc_m_n_.GetLength(I0) << ", "
                           << e1_grid_desc_m_n_.GetLength(I1) << "}" << std::endl;
             }
@@ -675,10 +661,6 @@ struct DeviceBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
                             GridwiseGemm64::MakeE1GridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
                                 e1_grid_desc_m_n_);
 
-                        d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_ =
-                            GridwiseGemm64::MakeD0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5(
-                                d0s_grid_desc_m_n_);
-
                         d1s_grid_desc_mblock_mperblock_nblock_nperblock_ =
                             GridwiseGemm64::MakeD1sGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
                                 d1s_grid_desc_m_n_);
@@ -698,10 +680,6 @@ struct DeviceBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
                         e1_grid_desc_mblock_mperblock_nblock_nperblock_ =
                             GridwiseGemm32::MakeE1GridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
                                 e1_grid_desc_m_n_);
-
-                        d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_ =
-                            GridwiseGemm32::MakeD0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5(
-                                d0s_grid_desc_m_n_);
 
                         d1s_grid_desc_mblock_mperblock_nblock_nperblock_ =
                             GridwiseGemm32::MakeD1sGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock(
@@ -731,10 +709,6 @@ struct DeviceBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
         // tensor descriptors for block/thread-wise copy
         A0GridDesc_AK0_M_AK1 a0_grid_desc_ak0_m_ak1_;
         B0GridDesc_BK0_N_BK1 b0_grid_desc_bk0_n_bk1_;
-        typename GridwiseGemm64::D0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5
-            d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_;
-        typename GridwiseGemm32::D0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5
-            d0s_grid_desc32_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_;
         B1GridDesc_BK0_N_BK1 b1_grid_desc_bk0_n_bk1_;
         typename GridwiseGemm64::D1sGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock
             d1s_grid_desc_mblock_mperblock_nblock_nperblock_;
@@ -793,7 +767,7 @@ struct DeviceBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
                     CDE1ElementwiseOperation,
                     DeviceOp::A0GridDesc_AK0_M_AK1,
                     DeviceOp::B0GridDesc_BK0_N_BK1,
-                    typename GridwiseGemm::D0sGridDescriptor_M0_N0_M1_N1_M2_N2_M3_N3_N4_N5,
+                    DeviceOp::D0sGridDesc_M_N,
                     DeviceOp::B1GridDesc_BK0_N_BK1,
                     typename GridwiseGemm::D1sGridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock,
                     typename GridwiseGemm::E1GridDescriptor_MBlock_MPerBlock_NBlock_NPerBlock,
@@ -819,7 +793,7 @@ struct DeviceBatchedGemmMultipleDGemmMultipleD_Xdl_CShuffle
                                               arg.cde1_element_op_,
                                               arg.a0_grid_desc_ak0_m_ak1_,
                                               arg.b0_grid_desc_bk0_n_bk1_,
-                                              arg.d0s_grid_desc_m0_n0_m1_n1_m2_n2_m3_n3_n4_n5_,
+                                              arg.d0s_grid_desc_m_n_,
                                               arg.b1_grid_desc_bk0_n_bk1_,
                                               arg.d1s_grid_desc_mblock_mperblock_nblock_nperblock_,
                                               arg.e1_grid_desc_mblock_mperblock_nblock_nperblock_,
