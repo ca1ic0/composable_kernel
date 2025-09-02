@@ -83,7 +83,7 @@ struct BlockWeightPreshuffleASmemBSmemCRegV1
         //     printf("---------Warp window thread buffer size=%d, first up to 16:\n", int(decltype(in_dstr_tensors)::get_thread_buffer_size()));
         //     for(int j = 0; j < (thread_buffer_size < 16 ? thread_buffer_size : 16); ++j)
         //     {
-        //         float v = pk_int4_t_to_fp32x2_t(a_tb.at(j)).x;
+        //         float v = pk_int4_t_to_fp32x2_t_signed_conversion(a_tb.at(j)).x;
         //         printf(" --------- Warp Window[%d]=%f\n", j, v);
         //     }
         //     //  printf("type convert input[%d] : %f\n",
@@ -154,6 +154,46 @@ struct BlockWeightPreshuffleASmemBSmemCRegV1
 
                     // warp GEMM
                     WG{}(c_warp_tensor, a_warp_tensor, b_warp_tensor(nIter)(kIter));
+
+                    if(get_block_id() == 0 && get_warp_id() == 0 && get_thread_id() == 0)
+                    {
+                        // printf("A Data:\n");
+                        // auto thread_buffer = a_warp_tensor.get_thread_buffer();
+
+                        // // Print all elements in the thread buffer
+                        // for(index_t i = 0; i < thread_buffer.size(); ++i)
+                        // {
+                        //     auto value = thread_buffer.get(i);
+                        //     if constexpr(std::is_same_v<decltype(value), fp8_t>)
+                        //     {
+                        //         // Convert fp8_t to float
+                        //         auto float_value = type_convert<float>(value);
+                        //         printf("  [%d] = %f\n", i, float_value);
+                        //     }
+                        // }
+
+                        // auto b_thread_buffer      = b_warp_tensor(nIter)(kIter).get_thread_buffer();
+
+                        // printf("B Data:\n");
+                        // for(index_t i = 0; i < b_thread_buffer.size(); ++i)
+                        // {
+                        //     auto value = b_thread_buffer.get(i);
+                        //     printf("Fp8 value");
+                        //     auto float_value = type_convert<float>(value);
+                        //     printf("  [%d] = %f\n", i, float_value);
+                        // }
+
+                        auto c_thread_buffer      = c_warp_tensor.get_thread_buffer();
+
+                        printf("C Data:\n");
+                        for(index_t i = 0; i < c_thread_buffer.size(); ++i)
+                        {
+                            auto value = c_thread_buffer.get(i);
+                            auto float_value = type_convert<float>(value);
+                            printf("  [%d] = %f\n", i, float_value*16);
+                        }
+                    }
+                    
 
                     // write C warp tensor into C block tensor
                     c_block_tensor.set_y_sliced_thread_data(

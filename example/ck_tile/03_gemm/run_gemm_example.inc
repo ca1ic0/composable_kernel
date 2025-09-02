@@ -385,25 +385,28 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
     if constexpr(preshuffle)
     {
         ck_tile::HostTensor<BDataType> b_k_n_dev = b_k_n;
-        if constexpr(std::is_same_v<BDataType, ck_tile::pk_int4_t>){
-            permute_vectors_i4x4_b(b_k_n_dev);
-        }
+        
+        printf("Original data B:\n");
         // for(int i = 0; i < 10; i++)
         // {
         //     auto float_value = ck_tile::pk_int4_t_to_fp32x2_t_signed_conversion(b_k_n_dev.data()[i]).x;
         //     printf("  [%d] = %f\n", i, float_value);
         //     //std::cout << std::hex << ck_tile::bit_cast<unsigned char>(b_k_n_dev.data()[i]) << " ";
         // }
-        ck_tile::HostTensor<BDataType> b_shuffle_host = shuffle_b<GemmConfig>(b_k_n_dev);
         // if constexpr(std::is_same_v<BDataType, ck_tile::pk_int4_t>){
-        //     permute_vectors_i4x4_b(b_shuffle_host);
+        //     permute_vectors_i4x4_b(b_k_n_dev);
         // }
-        // for(int i = 0; i < 10; i++)
-        // {
-        //     auto float_value = ck_tile::pk_int4_t_to_fp32x2_t_signed_conversion(b_shuffle_host.data()[i]).x;
-        //     printf("  [%d] = %f\n", i, float_value);
-        //     //std::cout << std::hex << ck_tile::bit_cast<unsigned char >(b_shuffle_host.data()[i])<< " ";
-        // }
+        ck_tile::HostTensor<BDataType> b_shuffle_host = shuffle_b<GemmConfig>(b_k_n_dev);
+        if constexpr(std::is_same_v<BDataType, ck_tile::pk_int4_t>){
+            permute_vectors_i4x4_b(b_shuffle_host);
+        }
+        printf("Shuffled and packed data B:\n");
+        for(int i = 0; i < 10; i++)
+        {
+            auto float_value = ck_tile::pk_int4_t_to_fp32x2_t_signed_conversion(b_shuffle_host.data()[i]).x;
+            printf("  [%d] = %f\n", i, float_value);
+            //std::cout << std::hex << ck_tile::bit_cast<unsigned char >(b_shuffle_host.data()[i])<< " ";
+        }
         // shuffled buffer B for device implementation
         b_k_n_dev_buf.ToDevice(b_shuffle_host.data());
     }

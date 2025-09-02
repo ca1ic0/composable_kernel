@@ -166,11 +166,15 @@ CK_TILE_HOST void reference_gemm(const HostTensor<ADataType>& a_m_k,
             {
                 v_b = ck_tile::type_convert<AccDataType>(b_element_op(b_k_n(k, n)));
             }
-            //printf("a(%lu,%lu) * b(%lu,%lu) = %f * %f\n", m, k, k, n, v_a, v_b);
+            
             v_acc += v_a * v_b;
+            if (m ==0  and n == 0)
+                printf("a(%lu,%lu) = %f, b(%lu,%lu) = %f, v_acc =  %f\n", m, k, v_a, k, n, v_b, v_acc);
         }
 
         c_m_n(m, n) = ck_tile::type_convert<CDataType>(acc_element_op(v_acc));
+        // if (m ==0  and n == 0)
+        //     printf("Final value for C is: c_m_n(%lu,%lu) = %f \n", m, n, ck_tile::type_convert<AccDataType>(c_m_n(m, n)));
     };
 
     make_ParallelTensorFunctor(f_mn, M, N)(std::thread::hardware_concurrency());
@@ -280,7 +284,7 @@ __global__ void naive_gemm_kernel(ADataType* A,
             }
             if constexpr(std::is_same_v<BDataType, pk_int4_t>)
             {
-                const fp32x2_t fp32_val = pk_int4_t_to_fp32x2_t(B[b_index / packed_size_b]);
+                const fp32x2_t fp32_val = pk_int4_t_to_fp32x2_t_signed_conversion(B[b_index / packed_size_b]);
                 if(k % 2 == 1)
                     v_b = fp32_val.hi;
                 else
