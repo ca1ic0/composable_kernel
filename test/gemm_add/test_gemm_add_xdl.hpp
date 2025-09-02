@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
 
 #include "gtest/gtest.h"
 #include "ck/ck.hpp"
@@ -58,7 +58,7 @@ class TestGemmAdd : public ::testing::Test
 
             all_success =
                 all_success &
-                GetImpl()(true, 1, false, false, M, N, K, StrideA, StrideB, StrideD0, StrideE);
+                GetImpl()(true, 2, false, false, M, N, K, StrideA, StrideB, StrideD0, StrideE);
         }
 
         EXPECT_TRUE(all_success);
