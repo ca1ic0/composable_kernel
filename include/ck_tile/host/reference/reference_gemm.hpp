@@ -168,8 +168,8 @@ CK_TILE_HOST void reference_gemm(const HostTensor<ADataType>& a_m_k,
             }
             
             v_acc += v_a * v_b;
-            if (m ==0  and n == 0)
-                printf("a(%lu,%lu) = %f, b(%lu,%lu) = %f, v_acc =  %f\n", m, k, v_a, k, n, v_b, v_acc);
+            // if (m ==0  and n == 0)
+            //    printf("a(%lu,%lu) = %f, b(%lu,%lu) = %f, v_acc =  %f\n", m, k, v_a, k, n, v_b, v_acc);
         }
 
         c_m_n(m, n) = ck_tile::type_convert<CDataType>(acc_element_op(v_acc));

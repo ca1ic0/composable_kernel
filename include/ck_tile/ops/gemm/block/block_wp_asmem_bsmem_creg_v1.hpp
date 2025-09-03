@@ -183,15 +183,15 @@ struct BlockWeightPreshuffleASmemBSmemCRegV1
                         //     printf("  [%d] = %f\n", i, float_value);
                         // }
 
-                        auto c_thread_buffer      = c_warp_tensor.get_thread_buffer();
+                        // auto c_thread_buffer      = c_warp_tensor.get_thread_buffer();
 
-                        printf("C Data:\n");
-                        for(index_t i = 0; i < c_thread_buffer.size(); ++i)
-                        {
-                            auto value = c_thread_buffer.get(i);
-                            auto float_value = type_convert<float>(value);
-                            printf("  [%d] = %f\n", i, float_value*16);
-                        }
+                        // printf("C Data:\n");
+                        // for(index_t i = 0; i < c_thread_buffer.size(); ++i)
+                        // {
+                        //     auto value = c_thread_buffer.get(i);
+                        //     auto float_value = type_convert<float>(value);
+                        //     printf("  [%d] = %f and with scale= %f\n ", i, float_value, float_value*16);
+                        // }
                     }
                     
 

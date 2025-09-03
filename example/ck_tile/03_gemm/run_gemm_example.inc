@@ -344,7 +344,7 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
         if constexpr(preshuffle)
         {
             ck_tile::FillUniformDistribution<ADataType>{-.5f, .5f}(a_m_k);
-            ck_tile::FillUniformDistribution<BDataType>{-.5f, .5f}(b_k_n);
+            ck_tile::FillUniformDistribution<BDataType>{-5.f, 5.f}(b_k_n);
         }
         else
         {
@@ -361,8 +361,8 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
     {
         // ck_tile::FillUniformDistribution<ADataType>{1.f, 1.f}(a_m_k);
         // ck_tile::FillUniformDistribution<BDataType>{1.f, 1.f}(b_k_n);
-        ck_tile::FillConstant<ADataType>{ck_tile::type_convert<ADataType>(1.0f)}(a_m_k);
-        ck_tile::FillConstant<BDataType>{0x11}(b_k_n); //for int4
+        ck_tile::FillConstant<ADataType>{ck_tile::type_convert<ADataType>(3.0f)}(a_m_k);
+        ck_tile::FillConstant<BDataType>{0x33}(b_k_n); //for int4
         //ck_tile::FillConstant<BDataType>{ck_tile::type_convert<ADataType>(1.0f)}(b_k_n);
     }
     else
