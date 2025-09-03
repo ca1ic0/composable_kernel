@@ -4,6 +4,7 @@
 #pragma once
 
 #include "ck_tile/core.hpp"
+#include <cstdint>
 #include <type_traits>
 
 namespace ck_tile {
@@ -110,37 +111,43 @@ CK_TILE_DEVICE bf16x4_t i4_to_bhalf4(int q)
     return res;
 }
 
-CK_TILE_DEVICE fp8x8_t amd_assembly_i4_to_fp8x8(int a)
+CK_TILE_DEVICE fp8x8_t amd_assembly_i4_to_fp8x8(uint32_t a)
 {
-    uint32_t src = static_cast<uint32_t>(a), src_hi;
-    uint32_t fp8x4_lo, fp8x4_hi;
-    float tmp_0, tmp_1;
+    // register values [0, 1, 2, 3]
+    static constexpr uint32_t reg0 = 0x4C484000;
+    // register values [4, 5, 6, 7]
+    static constexpr uint32_t reg1 = 0x56545250;
+    // register values [-4, -3, -2, -1]
+    static constexpr uint32_t reg2 = 0xD2D4D6D8;
+    // register values [-8, -7, -6, -5]
+    static constexpr uint32_t reg3 = 0xC0C8CCD0;
 
-    asm volatile("v_lshrrev_b32 %[v_hi_src], 4, %[v_src]\n"
-                 "v_cvt_off_f32_i4 %[v_tmp_0], %[v_src], src0_sel:BYTE_3\n"
-                 "v_cvt_off_f32_i4 %[v_tmp_1], %[v_hi_src], src0_sel:BYTE_3\n"
-                 "v_cvt_pk_fp8_f32 %[v_dst_hi], %[v_tmp_1], %[v_tmp_0], op_sel:[0, 0, 1]\n"
+    uint32_t tmp_pos, tmp_neg, tmp_res_even, tmp_res_odd, final_sel;
 
-                 "v_cvt_off_f32_i4 %[v_tmp_0], %[v_src], src0_sel:BYTE_2\n"
-                 "v_cvt_off_f32_i4 %[v_tmp_1], %[v_hi_src], src0_sel:BYTE_2\n"
-                 "v_cvt_pk_fp8_f32 %[v_dst_hi], %[v_tmp_1], %[v_tmp_0]\n"
+    uint32_t dict_sel = a & 0x07070707;
+    uint32_t sign     = a >> 1;
+    asm volatile("v_and_or_b32 %0, %1, %2, %3"
+                 : "=v"(final_sel)
+                 : "v"(sign), "v"(0x04040404), "v"(0x03020100));
 
-                 "v_cvt_off_f32_i4 %[v_tmp_0], %[v_src], src0_sel:BYTE_1\n"
-                 "v_cvt_off_f32_i4 %[v_tmp_1], %[v_hi_src], src0_sel:BYTE_1\n"
-                 "v_cvt_pk_fp8_f32 %[v_dst_lo], %[v_tmp_1], %[v_tmp_0], op_sel:[0, 0, 1]\n"
+    tmp_pos      = __builtin_amdgcn_perm(reg1, reg0, dict_sel);
+    tmp_neg      = __builtin_amdgcn_perm(reg3, reg2, dict_sel);
+    tmp_res_even = __builtin_amdgcn_perm(tmp_neg, tmp_pos, final_sel);
 
-                 "v_cvt_off_f32_i4 %[v_tmp_0], %[v_src]\n"
-                 "v_cvt_off_f32_i4 %[v_tmp_1], %[v_hi_src]\n"
-                 "v_cvt_pk_fp8_f32 %[v_dst_lo], %[v_tmp_1], %[v_tmp_0]\n"
-                 : [v_tmp_0] "+v"(tmp_0),
-                   [v_tmp_1] "+v"(tmp_1),
-                   [v_hi_src] "+v"(src_hi),
-                   [v_dst_lo] "+v"(fp8x4_lo),
-                   [v_dst_hi] "+v"(fp8x4_hi),
-                   [v_src] "+v"(src)
-                 :);
+    a >>= 4;
+    dict_sel = a & 0x07070707;
+    sign     = a >> 1;
+    asm volatile("v_and_or_b32 %0, %1, %2, %3"
+                 : "=v"(final_sel)
+                 : "v"(sign), "v"(0x04040404), "v"(0x03020100));
 
-    return bit_cast<fp8x8_t>(((static_cast<uint64_t>(fp8x4_hi) << 32) | fp8x4_lo));
+    tmp_pos           = __builtin_amdgcn_perm(reg1, reg0, dict_sel);
+    tmp_neg           = __builtin_amdgcn_perm(reg3, reg2, dict_sel);
+    tmp_res_odd       = __builtin_amdgcn_perm(tmp_neg, tmp_pos, final_sel);
+    auto tmp_res_low  = __builtin_amdgcn_perm(tmp_res_odd, tmp_res_even, 0x05010400);
+    auto tmp_res_high = __builtin_amdgcn_perm(tmp_res_odd, tmp_res_even, 0x07030602);
+
+    return bit_cast<fp8x8_t>((static_cast<uint64_t>(tmp_res_high) << 32) | tmp_res_low);
 }
 
 CK_TILE_DEVICE float amd_assembly_fp8_to_fp32(uint32_t src)
@@ -209,7 +216,7 @@ struct PassThroughPack8
 
     CK_TILE_HOST_DEVICE constexpr void operator()(fp8x8_t& y, const pk_int4x4_t& x) const
     {
-        y = amd_assembly_i4_to_fp8x8(bit_cast<int>(x));
+        y = amd_assembly_i4_to_fp8x8(bit_cast<uint32_t>(x));
     }
 
     CK_TILE_HOST_DEVICE constexpr void operator()(bf8x8_t& y, const pk_int4x4_t& x) const

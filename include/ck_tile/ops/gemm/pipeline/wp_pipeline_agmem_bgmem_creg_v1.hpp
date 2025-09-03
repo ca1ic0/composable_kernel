@@ -305,61 +305,61 @@ struct WeightPreshufflePipelineAGmemBGmemCRegV1
         // global read 0
         auto a_block_tile = load_tile(a_copy_dram_window);
         // print elements in copy dram window
-        // if(threadIdx.x == 0 && blockIdx.x == 0)
-        // {
-        //     // Load the data into a distributed tensor
-        //     auto distributed_tensor = a_copy_dram_window.load();
+        if(threadIdx.x == 0 && blockIdx.x == 0)
+        {
+            // Load the data into a distributed tensor
+            auto distributed_tensor = a_copy_dram_window.load();
 
-        //     printf("A Copy DRAM Window Data:\n");
-        //     auto thread_buffer = distributed_tensor.get_thread_buffer();
+            printf("A Copy DRAM Window Data:\n");
+            auto thread_buffer = distributed_tensor.get_thread_buffer();
 
-        //     // Print all elements in the thread buffer
-        //     for(index_t i = 0; i < thread_buffer.size(); ++i)
-        //     {
-        //         auto value = thread_buffer.get(i);
-        //         if constexpr(std::is_same_v<decltype(value), fp8_t>)
-        //         {
-        //             // Convert fp8_t to float
-        //             auto float_value = type_convert<float>(value);
-        //             printf("  [%d] = %f\n", i, float_value);
-        //         }
-        //     }
+            // Print all elements in the thread buffer
+            for(index_t i = 0; i < thread_buffer.size(); ++i)
+            {
+                auto value = thread_buffer.get(i);
+                if constexpr(std::is_same_v<decltype(value), fp8_t>)
+                {
+                    // Convert fp8_t to float
+                    auto float_value = type_convert<float>(value);
+                    printf("  [%d] = %f\n", i, float_value);
+                }
+            }
 
-        //     auto distributed_tensor_b = b_flat_dram_window.load();
-        //     auto b_thread_buffer      = distributed_tensor_b.get_thread_buffer();
+            auto distributed_tensor_b = b_flat_dram_window.load();
+            auto b_thread_buffer      = distributed_tensor_b.get_thread_buffer();
 
-        //     printf("B Copy DRAM Window Data:\n");
-        //     for(index_t i = 0; i < b_thread_buffer.size(); ++i)
-        //     {
-        //         auto value = b_thread_buffer.get(i);
-        //         if constexpr(std::is_same_v<BDataType, pk_int4_t>)
-        //         {
-        //             // Convert fp8_t to float
-        //             printf("int4 value");
-        //             auto float_value = pk_int4_t_to_fp32x2_t_signed_conversion(value).x;
-        //             printf("  [%d] = %f\n", i, float_value);
-        //         }else{
-        //             printf("Fp8 value");
-        //             auto float_value = type_convert<float>(value);
-        //             printf("  [%d] = %f\n", i, float_value);
-        //         }
-        //     }
-        //     if constexpr(std::is_same_v<BDataType, pk_int4_t>)
-        //     {
-        //         auto b_thread_buffer_2 = b_block_tile.get_thread_buffer();
-        //         printf("B Copy DRAM Window Data:\n");
-        //         for(index_t i = 0; i < b_thread_buffer_2.size(); ++i)
-        //         {
-        //             auto value = b_thread_buffer_2.get(i);
-        //             //if constexpr(std::is_same_v<decltype(value), fp8_t>)
-        //             {
-        //                 // Convert fp8_t to float
-        //                 auto float_value = type_convert<float>(value);
-        //                 printf("  [%d] = %f\n", i, float_value);
-        //             }
-        //         }
-        //     }
-        // }
+            printf("B Copy DRAM Window Data:\n");
+            for(index_t i = 0; i < b_thread_buffer.size(); ++i)
+            {
+                auto value = b_thread_buffer.get(i);
+                if constexpr(std::is_same_v<BDataType, pk_int4_t>)
+                {
+                    // Convert fp8_t to float
+                    printf("int4 value");
+                    auto float_value = pk_int4_t_to_fp32x2_t_signed_conversion(value).x;
+                    printf("  [%d] = %f\n", i, float_value);
+                }else{
+                    printf("Fp8 value");
+                    auto float_value = type_convert<float>(value);
+                    printf("  [%d] = %f\n", i, float_value);
+                }
+            }
+            if constexpr(std::is_same_v<BDataType, pk_int4_t>)
+            {
+                auto b_thread_buffer_2 = b_block_tile.get_thread_buffer();
+                printf("B Copy DRAM Window Data:\n");
+                for(index_t i = 0; i < b_thread_buffer_2.size(); ++i)
+                {
+                    auto value = b_thread_buffer_2.get(i);
+                    //if constexpr(std::is_same_v<decltype(value), fp8_t>)
+                    {
+                        // Convert fp8_t to float
+                        auto float_value = type_convert<float>(value);
+                        printf("  [%d] = %f\n", i, float_value);
+                    }
+                }
+            }
+        }
 
         statically_indexed_array<
             statically_indexed_array<decltype(b_flat_dram_window), KIterPerWarp>,
@@ -541,9 +541,9 @@ struct WeightPreshufflePipelineAGmemBGmemCRegV1
             // GEMM num_loop - 1
             block_flatmm(c_block_tile, a_warp_windows, b_warp_tensor_2);
         }
-        if constexpr(std::is_same_v<BDataType, pk_int4_t>){
-              tile_elementwise_inout([](auto& c) { c = c * 16; }, c_block_tile);
-        }
+        // if constexpr(std::is_same_v<BDataType, pk_int4_t>){
+        //       tile_elementwise_inout([](auto& c) { c = c * 16; }, c_block_tile);
+        // }
         return c_block_tile;
     }
 
