@@ -90,6 +90,7 @@ inline bool is_xdl_wmma_supported()
         {
             return false;
         }
+        return true;
     }
     else
     {
