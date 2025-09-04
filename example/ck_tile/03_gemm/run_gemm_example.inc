@@ -397,9 +397,9 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
         //     permute_vectors_i4x4_b(b_k_n_dev);
         // }
         ck_tile::HostTensor<BDataType> b_shuffle_host = shuffle_b<GemmConfig>(b_k_n_dev);
-        if constexpr(std::is_same_v<BDataType, ck_tile::pk_int4_t>){
-            permute_vectors_i4x4_b(b_shuffle_host);
-        }
+        // if constexpr(std::is_same_v<BDataType, ck_tile::pk_int4_t>){
+        //     permute_vectors_i4x4_b(b_shuffle_host);
+        // }
         printf("Shuffled and packed data B:\n");
         for(int i = 0; i < 10; i++)
         {
