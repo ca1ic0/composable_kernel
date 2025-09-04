@@ -80,7 +80,6 @@ inline bool is_xdl_wmma_supported()
     {
         return true;
     }
-#if defined(CK_ENABLE_DYNAMIC_WARP_SIZE)
     else if(is_gfx12_supported() || is_gfx11_supported())
     {
         if constexpr((MPerXDL != 16) || (NPerXDL != 16))
@@ -92,7 +91,6 @@ inline bool is_xdl_wmma_supported()
             return false;
         }
     }
-#endif
     else
     {
         return false;
