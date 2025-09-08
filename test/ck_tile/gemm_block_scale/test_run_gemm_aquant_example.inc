@@ -447,74 +447,26 @@ bool run_gemm_test_prec_type(std::string a_layout,
     return true;
 }
 
-template <template <typename PreType> typename GemmConfig>
+template <typename GemmConfig, typename TypeConfig, uint32_t QuantGroupSize>
 bool run_gemm_test(int argc, char* argv[])
 {
     auto [result, arg_parser] = create_args(argc, argv);
     if(!result)
         return false;
 
-    std::string data_type = arg_parser.get_str("prec");
-    std::string a_layout  = arg_parser.get_str("a_layout");
-    std::string b_layout  = arg_parser.get_str("b_layout");
+    std::string a_layout = arg_parser.get_str("a_layout");
+    std::string b_layout = arg_parser.get_str("b_layout");
 
-    if(data_type == "fp8")
-    {
-        using TypeConfig =
-            decltype(GemmQuantTypeConfig<ck_tile::fp8_t, ck_tile::fp8_t, ck_tile::half_t, float>{});
-        return run_gemm_test_prec_type<GemmConfig<ck_tile::fp8_t>, TypeConfig, 128>(
-            a_layout, b_layout, arg_parser);
-    }
-    else if(data_type == "bf8")
-    {
-        using TypeConfig =
-            decltype(GemmQuantTypeConfig<ck_tile::bf8_t, ck_tile::bf8_t, ck_tile::half_t, float>{});
-        return run_gemm_test_prec_type<GemmConfig<ck_tile::fp8_t>, TypeConfig, 128>(
-            a_layout, b_layout, arg_parser);
-    }
-    else if(data_type == "i4fp8")
-    {
-        using TypeConfig = decltype(GemmQuantTypeConfig<ck_tile::pk_int4_t,
-                                                        ck_tile::fp8_t,
-                                                        ck_tile::half_t,
-                                                        ck_tile::fp8_t>{});
-        return run_gemm_test_prec_type<GemmConfig<ck_tile::pk_int4_t>, TypeConfig, 128>(
-            a_layout, b_layout, arg_parser);
-    }
-    else if(data_type == "i4bf8")
-    {
-        using TypeConfig = decltype(GemmQuantTypeConfig<ck_tile::pk_int4_t,
-                                                        ck_tile::bf8_t,
-                                                        ck_tile::half_t,
-                                                        ck_tile::bf8_t>{});
-        return run_gemm_test_prec_type<GemmConfig<ck_tile::pk_int4_t>, TypeConfig, 128>(
-            a_layout, b_layout, arg_parser);
-    }
-    else if(data_type == "i4f32fp8")
-    {
-        using TypeConfig = decltype(GemmQuantTypeConfig<ck_tile::pk_int4_t,
-                                                        ck_tile::fp8_t,
-                                                        ck_tile::half_t,
-                                                        float>{});
-        return run_gemm_test_prec_type<GemmConfig<ck_tile::pk_int4_t>, TypeConfig, 128>(
-            a_layout, b_layout, arg_parser);
-    }
-    else if(data_type == "i4f32bf8")
-    {
-        using TypeConfig = decltype(GemmQuantTypeConfig<ck_tile::pk_int4_t,
-                                                        ck_tile::bf8_t,
-                                                        ck_tile::half_t,
-                                                        float>{});
-        return run_gemm_test_prec_type<GemmConfig<ck_tile::pk_int4_t>, TypeConfig, 128>(
-            a_layout, b_layout, arg_parser);
-    }
-    else
-    {
-        throw std::runtime_error("Unsupported data type for this operation !!!");
-    }
+    return run_gemm_test_prec_type<GemmConfig, TypeConfig, QuantGroupSize>(
+        a_layout, b_layout, arg_parser);
 }
 
-int run_gemm_combinations(std::string const& data_type)
+template <typename APrecType,
+          typename BPrecType = APrecType,
+          typename CPrecType = APrecType,
+          typename QDataType,
+          uint32_t QuantGroupSize = 128>
+int run_gemm_combinations()
 {
     // Define possible values for each parameter
     std::vector<std::vector<std::string>> mnk_values = {{
@@ -547,21 +499,19 @@ int run_gemm_combinations(std::string const& data_type)
                                                             "5120",
                                                             "1024",
                                                         }};
-    std::vector<std::string> prec_values             = {data_type};
 
     // We'll store all our arguments as strings first
     std::vector<std::string> arg_strings = {"test_tile_gemm_aquant_basic",
                                             "", // m placeholder
                                             "", // n placeholder
                                             "", // k placeholder
-                                            "", // prec placeholder
                                             "-init=0",
                                             "-v=1",
                                             "-warmup=0",
                                             "-repeat=1"};
 
     // Create an array of const char pointers for argv
-    constexpr size_t ARG_COUNT   = 9;
+    constexpr size_t ARG_COUNT   = 8;
     constexpr size_t ARG_MAX_LEN = 64;
     char args[ARG_COUNT][ARG_MAX_LEN];
     char* argv[ARG_COUNT];
@@ -574,39 +524,39 @@ int run_gemm_combinations(std::string const& data_type)
         arg_strings[2] = "-n=" + mnk[1];
         arg_strings[3] = "-k=" + mnk[2];
 
-        for(const auto& prec : prec_values)
+        // Set up the argv array with pointers to the string data
+        for(size_t i = 0; i < ARG_COUNT; i++)
         {
-            arg_strings[4] = "-prec=" + prec;
+            strncpy(args[i], arg_strings[i].c_str(), ARG_MAX_LEN);
+            argv[i] = args[i];
+        }
 
-            // Set up the argv array with pointers to the string data
-            for(size_t i = 0; i < ARG_COUNT; i++)
-            {
-                strncpy(args[i], arg_strings[i].c_str(), ARG_MAX_LEN);
-                argv[i] = args[i];
-            }
+        std::cout << "Arguments received: ";
+        for(size_t i = 1; i < ARG_COUNT; ++i)
+        {
+            std::cout << argv[i] << " ";
+        }
+        std::cout << std::endl;
 
-            std::cout << "Arguments received: ";
-            for(size_t i = 1; i < ARG_COUNT; ++i)
-            {
-                std::cout << argv[i] << " ";
-            }
-            std::cout << std::endl;
+        // Call the function with the current configuration
+        try
+        {
+            using TypeConfig =
+                decltype(GemmQuantTypeConfig<APrecType, BPrecType, CPrecType, QDataType>{});
 
-            // Call the function with the current configuration
-            try
-            {
-                is_success = run_gemm_test<GemmConfigDecode>(ARG_COUNT, argv) && is_success;
-            }
-            catch(const ArgumentsNotSupportedException& e)
-            {
-                std::cerr << "Caught ArgumentsNotSupportedException: " << e.what() << '\n';
-                // ArgumentsNotSupportedException  is not an error. Do not change is_success
-            }
-            catch(const std::runtime_error& e)
-            {
-                std::cerr << "Caught runtime error: " << e.what() << '\n';
-                is_success = false;
-            }
+            is_success = run_gemm_test<GemmConfigDecode<APrecType>, TypeConfig, QuantGroupSize>(
+                             ARG_COUNT, argv) &&
+                         is_success;
+        }
+        catch(const ArgumentsNotSupportedException& e)
+        {
+            std::cerr << "Caught ArgumentsNotSupportedException: " << e.what() << '\n';
+            // ArgumentsNotSupportedException  is not an error. Do not change is_success
+        }
+        catch(const std::runtime_error& e)
+        {
+            std::cerr << "Caught runtime error: " << e.what() << '\n';
+            is_success = false;
         }
     }
     return is_success ? EXIT_SUCCESS : EXIT_FAILURE;

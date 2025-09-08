@@ -3,4 +3,10 @@
 
 #include "test_run_gemm_aquant_example.inc"
 
-int main() { return run_gemm_combinations("i4fp8"); }
+int main()
+{
+    return run_gemm_combinations<ck_tile::pk_int4_t,
+                                 ck_tile::fp8_t,
+                                 ck_tile::half_t,
+                                 ck_tile::fp8_t>();
+}
