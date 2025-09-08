@@ -244,17 +244,12 @@ template <typename GemmConfig,
           typename AQLayout,
           typename BLayout,
           typename CLayout>
-bool run_gemm_test_with_layouts(int argc,
-                                char* argv[],
+bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser,
                                 const ALayout a_layout                  = ALayout{},
                                 const AQLayout aq_layout                = AQLayout{},
                                 const BLayout b_layout                  = BLayout{},
                                 [[maybe_unused]] const CLayout c_layout = CLayout{})
 {
-    auto [result, arg_parser] = create_args(argc, argv);
-    if(!result)
-        return false;
-
     using ADataType   = typename TypeConfig::ADataType;
     using AQDataType  = typename TypeConfig::QDataType;
     using BDataType   = typename TypeConfig::BDataType;
@@ -423,7 +418,9 @@ bool run_gemm_test_with_layouts(int argc,
 }
 
 template <typename GemmConfig, typename TypeConfig, uint32_t QuantGroupSize>
-bool run_gemm_test_prec_type(std::string a_layout, std::string b_layout, int argc, char* argv[])
+bool run_gemm_test_prec_type(std::string a_layout,
+                             std::string b_layout,
+                             ck_tile::ArgParser& arg_parser)
 {
     using Row = ck_tile::tensor_layout::gemm::RowMajor;
     using Col = ck_tile::tensor_layout::gemm::ColumnMajor;
@@ -435,7 +432,7 @@ bool run_gemm_test_prec_type(std::string a_layout, std::string b_layout, int arg
         if(a_layout == "R" && b_layout == "C")
         {
             return run_gemm_test_with_layouts<GemmConfig, TypeConfig, QuantGroupSize>(
-                argc, argv, Row{}, Row{}, Col{}, Row{});
+                arg_parser, Row{}, Row{}, Col{}, Row{});
         }
         else
         {
@@ -466,14 +463,14 @@ bool run_gemm_test(int argc, char* argv[])
         using TypeConfig =
             decltype(GemmQuantTypeConfig<ck_tile::fp8_t, ck_tile::fp8_t, ck_tile::half_t, float>{});
         return run_gemm_test_prec_type<GemmConfig<ck_tile::fp8_t>, TypeConfig, 128>(
-            a_layout, b_layout, argc, argv);
+            a_layout, b_layout, arg_parser);
     }
     else if(data_type == "bf8")
     {
         using TypeConfig =
             decltype(GemmQuantTypeConfig<ck_tile::bf8_t, ck_tile::bf8_t, ck_tile::half_t, float>{});
         return run_gemm_test_prec_type<GemmConfig<ck_tile::fp8_t>, TypeConfig, 128>(
-            a_layout, b_layout, argc, argv);
+            a_layout, b_layout, arg_parser);
     }
     else if(data_type == "i4fp8")
     {
@@ -482,7 +479,7 @@ bool run_gemm_test(int argc, char* argv[])
                                                         ck_tile::half_t,
                                                         ck_tile::fp8_t>{});
         return run_gemm_test_prec_type<GemmConfig<ck_tile::pk_int4_t>, TypeConfig, 128>(
-            a_layout, b_layout, argc, argv);
+            a_layout, b_layout, arg_parser);
     }
     else if(data_type == "i4bf8")
     {
@@ -491,7 +488,7 @@ bool run_gemm_test(int argc, char* argv[])
                                                         ck_tile::half_t,
                                                         ck_tile::bf8_t>{});
         return run_gemm_test_prec_type<GemmConfig<ck_tile::pk_int4_t>, TypeConfig, 128>(
-            a_layout, b_layout, argc, argv);
+            a_layout, b_layout, arg_parser);
     }
     else if(data_type == "i4f32fp8")
     {
@@ -500,7 +497,7 @@ bool run_gemm_test(int argc, char* argv[])
                                                         ck_tile::half_t,
                                                         float>{});
         return run_gemm_test_prec_type<GemmConfig<ck_tile::pk_int4_t>, TypeConfig, 128>(
-            a_layout, b_layout, argc, argv);
+            a_layout, b_layout, arg_parser);
     }
     else if(data_type == "i4f32bf8")
     {
@@ -509,7 +506,7 @@ bool run_gemm_test(int argc, char* argv[])
                                                         ck_tile::half_t,
                                                         float>{});
         return run_gemm_test_prec_type<GemmConfig<ck_tile::pk_int4_t>, TypeConfig, 128>(
-            a_layout, b_layout, argc, argv);
+            a_layout, b_layout, arg_parser);
     }
     else
     {
