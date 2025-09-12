@@ -651,7 +651,7 @@ struct HostTensor
      */
     std::ostream& print_first_n(std::ostream& os, std::size_t n = 5) const
     {
-        os << mDesc;
+        os << mDesc << std::endl;
         os << "[";
         for(typename Data::size_type idx = 0; idx < std::min(n, mData.size()); ++idx)
         {
@@ -662,7 +662,7 @@ struct HostTensor
             if constexpr(std::is_same_v<T, bf16_t> || std::is_same_v<T, fp16_t> ||
                          std::is_same_v<T, fp8_t> || std::is_same_v<T, bf8_t>)
             {
-                os << type_convert<float>(mData[idx]) << " #### ";
+                os << type_convert<float>(mData[idx]) << "  ";
             }
             else if constexpr(std::is_same_v<T, ck_tile::pk_int4_t>)
             {
@@ -689,7 +689,7 @@ struct HostTensor
 
     friend std::ostream& operator<<(std::ostream& os, const HostTensor<T>& t)
     {
-        os << t.mDesc;
+        os << t.mDesc << std::endl;
         os << "[";
         for(typename Data::size_type idx = 0; idx < t.mData.size(); ++idx)
         {
@@ -697,16 +697,21 @@ struct HostTensor
             {
                 os << ", ";
             }
+            auto l = t.mDesc.get_length(0) == 1 ? 8 : t.mDesc.get_length(0);
+            if(idx % l == 0)
+            {
+                os << std::endl;
+            }
             if constexpr(std::is_same_v<T, bf16_t> || std::is_same_v<T, fp16_t> ||
                          std::is_same_v<T, fp8_t> || std::is_same_v<T, bf8_t>)
             {
-                os << type_convert<float>(t.mData[idx]) << " #### ";
+                os << type_convert<float>(t.mData[idx]) << "  ";
             }
             else if constexpr(std::is_same_v<T, ck_tile::pk_int4_t>)
             {
                 auto unpacked = pk_int4_t_to_int8x2_t(t.mData[idx]);
                 os << "pk(" << static_cast<int>(unpacked[0]) << ", "
-                   << static_cast<int>(unpacked[1]) << ") #### ";
+                   << static_cast<int>(unpacked[1]) << ")  ";
             }
             else
             {
