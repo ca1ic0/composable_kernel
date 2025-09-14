@@ -637,30 +637,13 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
     std::vector<float> group_attn_scales = get_floats_from_string(str_of_floats);
     HSTU_CHECK(!group_attn_scales.empty(), "group attn_scales shoud be defined!");
 
-    int input_max_uih_seqlen = arg_parser.get_int("max_seqlen");
-    int input_max_target     = arg_parser.get_int("max_target");
-
-    int max_uih_seqlen        = 0;
-    int max_target            = 0;
-    int max_contextual_seqlen = 0;
-
     // supplement seq_lengths using the last input value if user-provided lengths not enough
     supplement_array_by_last_element(seq_lengths, num_batch);
-
-    // only consider num_batch values even if more values were provided by the user
-    for(int i = 0; i < num_batch; i++)
-    {
-        max_uih_seqlen = max(max_uih_seqlen, seq_lengths[i]);
-    };
 
     if(!num_targets.empty())
     {
         // supplement num_targets using the last input value if user-provided lengths not enough
         supplement_array_by_last_element(num_targets, num_batch);
-
-        // only consider num_batch values even if more values were provided by the user
-        for(int i = 0; i < num_batch; i++)
-            max_target = max(max_target, num_targets[i]);
     };
 
     // supplement group_max_seqlens using the last input value if user-provided lengths not enough
@@ -680,65 +663,13 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
     // supplement group_attn_scales using the last input value if user-provided values not enough
     supplement_array_by_last_element(group_attn_scales, num_group);
 
-    /*
-        std::cout << "num_targets: " << std::endl;
-        for (auto val : num_targets)
-              std::cout << val << " ";
-        std::cout << std::endl;
-
-        std::cout << "seq_lengths: " << std::endl;
-        for (auto val : seq_lengths)
-              std::cout << val << " ";
-        std::cout << std::endl;
-
-        std::cout << "group_max_seqlens: " << std::endl;
-        for (auto val : group_max_seqlens)
-              std::cout << val << " ";
-        std::cout << std::endl;
-
-        std::cout << "group_contextual_seqlens: " << std::endl;
-        for (auto val : group_contextual_seqlens)
-              std::cout << val << " ";
-        std::cout << std::endl;
-
-        std::cout << "group_window_sizes: " << std::endl;
-        for (auto val : group_window_sizes)
-              std::cout << val << " ";
-        std::cout << std::endl;
-
-        std::cout << "group_min_full_attn_seqlens: " << std::endl;
-        for (auto val : group_min_full_attn_seqlens)
-              std::cout << val << " ";
-        std::cout << std::endl;
-
-        std::cout << "group_attn_scales: " << std::endl;
-        for (auto val : group_attn_scales)
-              std::cout << val << " ";
-        std::cout << std::endl;
-    */
-
-    // only consider num_group values even if more values were provided by the user
-    for(int i = 0; i < num_group; i++)
-    {
-        max_contextual_seqlen = max(max_contextual_seqlen, group_contextual_seqlens[i]);
-    };
-
-    HSTU_CHECK(input_max_uih_seqlen <= 0 || input_max_uih_seqlen >= max_uih_seqlen,
-               "the user input of max_uih_seqlen can either be ignored or be bigger than all "
-               "uih_seqlens!");
-    HSTU_CHECK(input_max_target <= 0 || input_max_target >= max_target,
-               "the user input of max_target can either be ignored or be bigger than all targets!");
-
-    max_uih_seqlen = (input_max_uih_seqlen > 0) ? input_max_uih_seqlen : max_uih_seqlen;
-    max_target     = (input_max_target > 0) ? input_max_target : max_target;
-
     int phy_seqlen     = 0;
-    int max_max_seqlen = max_uih_seqlen + max_target + max_contextual_seqlen;
+    int max_max_seqlen = 0;
 
     // only consider num_group values even if more values were provided by the user
     for(int i = 0; i < num_group; i++)
     {
-        HSTU_CHECK(max_max_seqlen >= group_contextual_seqlens[i], "Check failed!");
+        max_max_seqlen = max(max_max_seqlen, group_max_seqlens[i]);
     };
 
     std::vector<int> seq_offsets;
@@ -976,13 +907,10 @@ int main(int argc, char* argv[])
     }
 
     int num_group               = static_cast<int>(arg_parser.get_int("g"));
-    bool is_jagged              = static_cast<bool>(arg_parser.get_int("jagged"));
     const std::string data_type = arg_parser.get_str("prec");
 
     if(num_group > 1)
     {
-        HSTU_CHECK(is_jagged, "group hstu can only be used with jagged inputs!");
-
         if(data_type == "fp16")
         {
             return run_group_hstu<ck_tile::half_t>(arg_parser, num_group) ? 0 : -2;
@@ -994,6 +922,8 @@ int main(int argc, char* argv[])
     }
     else
     {
+        bool is_jagged = static_cast<bool>(arg_parser.get_int("jagged"));
+
         if(data_type == "fp16")
         {
             return run_no_group_hstu<ck_tile::half_t>(arg_parser, is_jagged) ? 0 : -2;
