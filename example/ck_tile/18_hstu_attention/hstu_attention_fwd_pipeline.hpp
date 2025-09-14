@@ -36,6 +36,7 @@ struct HstuAttentionFwdPipelineQRKSVS
 
     static_assert(kSubQKHeaddim <= 256, "hdim bigger than 256 is not suitable for this pipeline!");
 
+    static constexpr bool kUseGroup   = Problem::kUseGroup;
     static constexpr bool kIsJagged   = Problem::kIsJagged;
     static constexpr auto kHasBias    = Problem::kHasBias;
     static constexpr bool kHasDropout = Problem::kHasDropout;

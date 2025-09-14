@@ -14,4 +14,4 @@ template void run_batched_forward_causal_bias_dropout_dispatch<
     false,
     false,
     false,
-    128>(HstuAttentionFwdParams& param, hipStream_t stream);
+    128>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);

@@ -31,7 +31,7 @@ HSTU_FORWARD_INSTANCE_TEMPLATE = """
     {has_causal},
     {has_bias},
     {has_dropout},
-    {max_k}>(HstuAttentionFwdParams& param, hipStream_t stream);
+    {max_k}>(HstuAttention{group_or_not}FwdParams& param, hipStream_t stream);
 """
 
 HSTU_FORWARD_INSTANCE_FNAME = (
@@ -70,13 +70,14 @@ TYPE_FNAME_MAP = {
     "bf16": "half",
 }
 
-MODE_NAME_MAP = {
-    "batched": "Batched",
-    "jagged": "Jagged",
+MODE_GROUP_OR_NOT_MAP = {
+    "batched": "NoGroup",
+    "jagged": "NoGroup",
+    "group": "Group",
 }
 
 def create_forward_instances(instance_dir: Path, headdims: List) -> None:
-    for mode in ["batched", "jagged"]:
+    for mode in ["batched", "jagged", "group"]:
         for dtype in ["fp16", "bf16"]:
             for has_causal in [True, False]:
                 for has_bias in [True, False]:
@@ -104,7 +105,7 @@ def create_forward_instances(instance_dir: Path, headdims: List) -> None:
                                 has_bias=BOOL_MAP[has_bias],
                                 has_dropout=BOOL_MAP[has_dropout],
                                 max_k=max_k,
-                                cap_mode=MODE_NAME_MAP[mode],
+                                group_or_not=MODE_GROUP_OR_NOT_MAP[mode],
                             )
                             (instance_dir / fname).write_text(
                                 HSTU_COPYRIGHT_HEADER
@@ -114,7 +115,7 @@ def create_forward_instances(instance_dir: Path, headdims: List) -> None:
 
 
 def create_forward_instances_ref(instance_dir: Path, headdims: List) -> None:
-    for mode in ["batched", "jagged"]:
+    for mode in ["batched", "jagged", "group"]:
         for dtype in ["fp16", "bf16"]:
             ref_fname = HSTU_INSTANCE_REF_FNAME.format(
                 mode=mode,
@@ -142,7 +143,7 @@ def create_forward_instances_ref(instance_dir: Path, headdims: List) -> None:
                                         has_bias=BOOL_MAP[has_bias],
                                         has_dropout=BOOL_MAP[has_dropout],
                                         max_k=max_k,
-                                        cap_mode=MODE_NAME_MAP[mode],
+                                        group_or_not=MODE_GROUP_OR_NOT_MAP[mode],
                                     )
                                 )
                                 file.write(forward_instance)

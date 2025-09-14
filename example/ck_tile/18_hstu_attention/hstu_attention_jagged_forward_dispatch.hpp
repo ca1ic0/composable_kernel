@@ -34,14 +34,15 @@ struct jagged_forward_causal_bias_dropout_dispatch
         typename HstuAttentionFwdTypeConfig<InOutDataType>::GemmAccDataType,
         typename HstuAttentionFwdTypeConfig<InOutDataType>::CompDataType,
         typename HstuAttentionFwdTypeConfig<InOutDataType>::BiasDataType,
-        true, // kIsJagged
+        false, // kUseGroup
+        true,  // kIsJagged
         kHasBias,
         kHasDropout,
         kUseCausal,
         HstuAttentionTileSetting,
         HstuTraits>;
 
-    static void Run(HstuAttentionFwdParams& param, hipStream_t stream)
+    static void Run(HstuAttentionNoGroupFwdParams& param, hipStream_t stream)
     {
         constexpr ck_tile::index_t occupancy = -1;
 
@@ -77,7 +78,7 @@ struct jagged_forward_causal_bias_dropout_dispatch
     };
 
     template <typename HstuKernel>
-    static void RunWithKernel(HstuAttentionFwdParams& param, hipStream_t stream)
+    static void RunWithKernel(HstuAttentionNoGroupFwdParams& param, hipStream_t stream)
     {
         const auto kargs = [&] {
             return HstuKernel::MakeKargs(param.q_ptr,
@@ -131,7 +132,7 @@ template <typename InOutDataType,
           bool kHasBias,
           bool kHasDropout,
           ck_tile::index_t MaxK>
-void run_jagged_forward_causal_bias_dropout_dispatch(HstuAttentionFwdParams& param,
+void run_jagged_forward_causal_bias_dropout_dispatch(HstuAttentionNoGroupFwdParams& param,
                                                      hipStream_t stream)
 {
     jagged_forward_causal_bias_dropout_dispatch<InOutDataType,

@@ -14,165 +14,165 @@ extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     true,
     true,
     true,
-    64>(HstuAttentionFwdParams& param, hipStream_t stream);
+    64>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     true,
     true,
-    64>(HstuAttentionFwdParams& param, hipStream_t stream);
+    64>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     true,
     true,
     false,
-    64>(HstuAttentionFwdParams& param, hipStream_t stream);
+    64>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     true,
     false,
-    64>(HstuAttentionFwdParams& param, hipStream_t stream);
+    64>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     true,
     false,
     true,
-    64>(HstuAttentionFwdParams& param, hipStream_t stream);
+    64>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     false,
     true,
-    64>(HstuAttentionFwdParams& param, hipStream_t stream);
+    64>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     true,
     false,
     false,
-    64>(HstuAttentionFwdParams& param, hipStream_t stream);
+    64>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     false,
     false,
-    64>(HstuAttentionFwdParams& param, hipStream_t stream);
+    64>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     true,
     true,
     true,
-    128>(HstuAttentionFwdParams& param, hipStream_t stream);
+    128>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     true,
     true,
-    128>(HstuAttentionFwdParams& param, hipStream_t stream);
+    128>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     true,
     true,
     false,
-    128>(HstuAttentionFwdParams& param, hipStream_t stream);
+    128>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     true,
     false,
-    128>(HstuAttentionFwdParams& param, hipStream_t stream);
+    128>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     true,
     false,
     true,
-    128>(HstuAttentionFwdParams& param, hipStream_t stream);
+    128>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     false,
     true,
-    128>(HstuAttentionFwdParams& param, hipStream_t stream);
+    128>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     true,
     false,
     false,
-    128>(HstuAttentionFwdParams& param, hipStream_t stream);
+    128>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     false,
     false,
-    128>(HstuAttentionFwdParams& param, hipStream_t stream);
+    128>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     true,
     true,
     true,
-    256>(HstuAttentionFwdParams& param, hipStream_t stream);
+    256>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     true,
     true,
-    256>(HstuAttentionFwdParams& param, hipStream_t stream);
+    256>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     true,
     true,
     false,
-    256>(HstuAttentionFwdParams& param, hipStream_t stream);
+    256>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     true,
     false,
-    256>(HstuAttentionFwdParams& param, hipStream_t stream);
+    256>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     true,
     false,
     true,
-    256>(HstuAttentionFwdParams& param, hipStream_t stream);
+    256>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     false,
     true,
-    256>(HstuAttentionFwdParams& param, hipStream_t stream);
+    256>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     true,
     false,
     false,
-    256>(HstuAttentionFwdParams& param, hipStream_t stream);
+    256>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
 
 extern template void run_jagged_forward_causal_bias_dropout_dispatch<
     ck_tile::bf16_t,
     false,
     false,
     false,
-    256>(HstuAttentionFwdParams& param, hipStream_t stream);
+    256>(HstuAttentionNoGroupFwdParams& param, hipStream_t stream);
