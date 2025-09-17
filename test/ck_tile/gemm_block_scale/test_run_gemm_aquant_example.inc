@@ -272,10 +272,11 @@ bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser,
     ck_tile::index_t stride_B  = arg_parser.get_int("stride_b");
     ck_tile::index_t stride_C  = arg_parser.get_int("stride_c");
 
-    ck_tile::index_t kbatch      = arg_parser.get_int("split_k");
-    int n_warmup                 = arg_parser.get_int("warmup");
-    int n_repeat                 = arg_parser.get_int("repeat");
-    ck_tile::index_t init_method = arg_parser.get_int("init");
+    constexpr ck_tile::index_t kbatch = 1;
+    constexpr int init_method         = 0;
+    constexpr int verification_method = 1;
+    constexpr int n_warmup            = 0;
+    constexpr int n_repeat            = 1;
 
     stride_A  = ck_tile::get_default_stride(M, K, stride_A, is_row_major(a_layout));
     stride_AQ = ck_tile::get_default_stride(M, AQK, stride_AQ, is_row_major(aq_layout));
@@ -295,7 +296,7 @@ bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser,
     std::mt19937 gen(rd());
     std::uniform_int_distribution<std::uint32_t> fill_seed(0, 500);
 
-    if(init_method == 0)
+    if constexpr(init_method == 0)
     {
         if constexpr(std::is_same_v<ADataType, ck_tile::pk_int4_t>)
         {
@@ -309,12 +310,12 @@ bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser,
         ck_tile::FillUniformDistribution<AQDataType>{-2.0f, 2.0f, fill_seed(gen)}(aq_m_aqk);
         ck_tile::FillUniformDistribution<BDataType>{-5.0f, 5.0f, fill_seed(gen)}(b_k_n);
     }
-    else if(init_method == 1)
+    else if constexpr(init_method == 1)
     {
         std::cout << "Monotonic initialization is not supported." << std::endl;
         return true;
     }
-    else if(init_method == 2)
+    else if constexpr(init_method == 2)
     {
         ck_tile::FillConstant<ADataType>{static_cast<ADataType>(0x22)}(a_m_k);
         ck_tile::FillConstant<AQDataType>{static_cast<AQDataType>(0.5f)}(aq_m_aqk);
@@ -377,7 +378,7 @@ bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser,
     c_m_n_dev_buf.FromDevice(c_m_n_dev_result.data());
     bool pass = true;
 
-    if(arg_parser.get_int("v") == 1)
+    if constexpr(verification_method == 1)
     {
         ck_tile::HostTensor<CDataType> c_m_n_host_ref(
             ck_tile::host_tensor_descriptor(M, N, stride_C, is_row_major(CLayout{})));
@@ -408,7 +409,7 @@ bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser,
         }
         std::cout << "CPU verification " << (pass ? "Passed!" : "Failed ...") << std::endl;
     }
-    else if(arg_parser.get_int("v") == 2)
+    else if constexpr(verification_method == 2)
     {
         std::cout << "GPU verification is not implemented yet. Re-run with -v=1" << std::endl;
         return false;
@@ -505,13 +506,10 @@ int run_gemm_combinations()
                                             "", // m placeholder
                                             "", // n placeholder
                                             "", // k placeholder
-                                            "-init=0",
-                                            "-v=1",
-                                            "-warmup=0",
-                                            "-repeat=1"};
+                                            };
 
     // Create an array of const char pointers for argv
-    constexpr size_t ARG_COUNT   = 8;
+    constexpr size_t ARG_COUNT   = 4;
     constexpr size_t ARG_MAX_LEN = 64;
     char args[ARG_COUNT][ARG_MAX_LEN];
     char* argv[ARG_COUNT];
