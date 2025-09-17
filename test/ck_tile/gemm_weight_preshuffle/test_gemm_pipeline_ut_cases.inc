@@ -3,9 +3,6 @@
 
 #pragma once
 
-#ifndef TEST_GEMM_PIPELINE_UT_CASES_INC
-#define TEST_GEMM_PIPELINE_UT_CASES_INC
-
 TYPED_TEST(TEST_SUITE_NAME, GemmPreshuffle)
 {
     constexpr int M           = 2048;
@@ -132,5 +129,3 @@ TYPED_TEST(TEST_SUITE_NAME, GemmPreshuffle_1024x2048x4096)
     constexpr bool Preshuffle = true;
     this->template Run<PadM, PadN, PadK, Preshuffle>(M, N, K);
 }
-
-#endif
