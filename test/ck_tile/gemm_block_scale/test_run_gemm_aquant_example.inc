@@ -267,10 +267,10 @@ bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser,
 
     ck_tile::index_t AQK = K / QuantGroupSize;
 
-    ck_tile::index_t stride_A  = arg_parser.get_int("stride_a");
-    ck_tile::index_t stride_AQ = arg_parser.get_int("stride_q");
-    ck_tile::index_t stride_B  = arg_parser.get_int("stride_b");
-    ck_tile::index_t stride_C  = arg_parser.get_int("stride_c");
+    ck_tile::index_t stride_A  = 0;
+    ck_tile::index_t stride_AQ = 0;
+    ck_tile::index_t stride_B  = 0;
+    ck_tile::index_t stride_C  = 0;
 
     constexpr ck_tile::index_t kbatch = 1;
     constexpr int init_method         = 0;
