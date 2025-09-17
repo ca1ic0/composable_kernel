@@ -244,17 +244,13 @@ template <typename GemmConfig,
           typename AQLayout,
           typename BLayout,
           typename CLayout>
-bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser)
+bool run_gemm_test_with_layouts(const int M, const int N, const int K)
 {
     using ADataType   = typename TypeConfig::ADataType;
     using AQDataType  = typename TypeConfig::QDataType;
     using BDataType   = typename TypeConfig::BDataType;
     using AccDataType = typename TypeConfig::AccDataType;
     using CDataType   = typename TypeConfig::CDataType;
-
-    ck_tile::index_t M = arg_parser.get_int("m");
-    ck_tile::index_t N = arg_parser.get_int("n");
-    ck_tile::index_t K = arg_parser.get_int("k");
 
     if(K % QuantGroupSize != 0)
     {
@@ -415,23 +411,13 @@ bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser)
 }
 
 template <typename GemmConfig, typename TypeConfig, uint32_t QuantGroupSize>
-bool run_gemm_test_prec_type(ck_tile::ArgParser& arg_parser)
+bool run_gemm_test_prec_type(const int M, const int N, const int K)
 {
     using Row = ck_tile::tensor_layout::gemm::RowMajor;
     using Col = ck_tile::tensor_layout::gemm::ColumnMajor;
 
     return run_gemm_test_with_layouts<GemmConfig, TypeConfig, QuantGroupSize, Row, Row, Col, Row>(
-        arg_parser);
-}
-
-template <typename GemmConfig, typename TypeConfig, uint32_t QuantGroupSize>
-bool run_gemm_test(int argc, char* argv[])
-{
-    auto [result, arg_parser] = create_args(argc, argv);
-    if(!result)
-        return false;
-
-    return run_gemm_test_prec_type<GemmConfig, TypeConfig, QuantGroupSize>(arg_parser);
+        M, N, K);
 }
 
 template <typename APrecType,
@@ -442,72 +428,43 @@ template <typename APrecType,
 int run_gemm_combinations()
 {
     // Define possible values for each parameter
-    std::vector<std::vector<std::string>> mnk_values = {{
-                                                            "1",
-                                                            "2048",
-                                                            "5120",
-                                                        },
-                                                        {
-                                                            "2",
-                                                            "2048",
-                                                            "5120",
-                                                        },
-                                                        {
-                                                            "16",
-                                                            "2048",
-                                                            "5120",
-                                                        },
-                                                        {
-                                                            "17",
-                                                            "2048",
-                                                            "5120",
-                                                        },
-                                                        {
-                                                            "2047",
-                                                            "5120",
-                                                            "1024",
-                                                        },
-                                                        {
-                                                            "2048",
-                                                            "5120",
-                                                            "1024",
-                                                        }};
-
-    // We'll store all our arguments as strings first
-    std::vector<std::string> arg_strings = {
-        "test_tile_gemm_aquant_basic",
-        "", // m placeholder
-        "", // n placeholder
-        "", // k placeholder
-    };
-
-    // Create an array of const char pointers for argv
-    constexpr size_t ARG_COUNT   = 4;
-    constexpr size_t ARG_MAX_LEN = 64;
-    char args[ARG_COUNT][ARG_MAX_LEN];
-    char* argv[ARG_COUNT];
+    std::vector<std::vector<int>> mnk_values = {{
+                                                    1,
+                                                    2048,
+                                                    5120,
+                                                },
+                                                {
+                                                    2,
+                                                    2048,
+                                                    5120,
+                                                },
+                                                {
+                                                    16,
+                                                    2048,
+                                                    5120,
+                                                },
+                                                {
+                                                    17,
+                                                    2048,
+                                                    5120,
+                                                },
+                                                {
+                                                    2047,
+                                                    5120,
+                                                    1024,
+                                                },
+                                                {
+                                                    2048,
+                                                    5120,
+                                                    1024,
+                                                }};
 
     // Run all combinations
     bool is_success = true;
     for(const auto& mnk : mnk_values)
     {
-        arg_strings[1] = "-m=" + mnk[0];
-        arg_strings[2] = "-n=" + mnk[1];
-        arg_strings[3] = "-k=" + mnk[2];
-
-        // Set up the argv array with pointers to the string data
-        for(size_t i = 0; i < ARG_COUNT; i++)
-        {
-            strncpy(args[i], arg_strings[i].c_str(), ARG_MAX_LEN);
-            argv[i] = args[i];
-        }
-
         std::cout << "Arguments received: ";
-        for(size_t i = 1; i < ARG_COUNT; ++i)
-        {
-            std::cout << argv[i] << " ";
-        }
-        std::cout << std::endl;
+        std::cout << "-m=" << mnk[0] << " -n=" << mnk[1] << " -k=" << mnk[2] << std::endl;
 
         // Call the function with the current configuration
         try
@@ -515,9 +472,10 @@ int run_gemm_combinations()
             using TypeConfig =
                 decltype(GemmQuantTypeConfig<APrecType, BPrecType, CPrecType, QDataType>{});
 
-            is_success = run_gemm_test<GemmConfigDecode<APrecType>, TypeConfig, QuantGroupSize>(
-                             ARG_COUNT, argv) &&
-                         is_success;
+            is_success =
+                run_gemm_test_prec_type<GemmConfigDecode<APrecType>, TypeConfig, QuantGroupSize>(
+                    mnk[0], mnk[1], mnk[2]) &&
+                is_success;
         }
         catch(const ArgumentsNotSupportedException& e)
         {
