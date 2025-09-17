@@ -244,11 +244,7 @@ template <typename GemmConfig,
           typename AQLayout,
           typename BLayout,
           typename CLayout>
-bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser,
-                                const ALayout a_layout                  = ALayout{},
-                                const AQLayout aq_layout                = AQLayout{},
-                                const BLayout b_layout                  = BLayout{},
-                                [[maybe_unused]] const CLayout c_layout = CLayout{})
+bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser)
 {
     using ADataType   = typename TypeConfig::ADataType;
     using AQDataType  = typename TypeConfig::QDataType;
@@ -278,17 +274,17 @@ bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser,
     constexpr int n_warmup            = 0;
     constexpr int n_repeat            = 1;
 
-    stride_A  = ck_tile::get_default_stride(M, K, stride_A, is_row_major(a_layout));
-    stride_AQ = ck_tile::get_default_stride(M, AQK, stride_AQ, is_row_major(aq_layout));
-    stride_B  = ck_tile::get_default_stride(K, N, stride_B, is_row_major(b_layout));
+    stride_A  = ck_tile::get_default_stride(M, K, stride_A, is_row_major(ALayout{}));
+    stride_AQ = ck_tile::get_default_stride(M, AQK, stride_AQ, is_row_major(AQLayout{}));
+    stride_B  = ck_tile::get_default_stride(K, N, stride_B, is_row_major(BLayout{}));
     stride_C  = ck_tile::get_default_stride(M, N, stride_C, is_row_major(CLayout{}));
 
     ck_tile::HostTensor<ADataType> a_m_k(
-        ck_tile::host_tensor_descriptor(M, K, stride_A, is_row_major(a_layout)));
+        ck_tile::host_tensor_descriptor(M, K, stride_A, is_row_major(ALayout{})));
     ck_tile::HostTensor<AQDataType> aq_m_aqk(
-        ck_tile::host_tensor_descriptor(M, AQK, stride_AQ, is_row_major(aq_layout)));
+        ck_tile::host_tensor_descriptor(M, AQK, stride_AQ, is_row_major(AQLayout{})));
     ck_tile::HostTensor<BDataType> b_k_n(
-        ck_tile::host_tensor_descriptor(K, N, stride_B, is_row_major(b_layout)));
+        ck_tile::host_tensor_descriptor(K, N, stride_B, is_row_major(BLayout{})));
     ck_tile::HostTensor<CDataType> c_m_n_dev_result(
         ck_tile::host_tensor_descriptor(M, N, stride_C, is_row_major(CLayout{})));
 
@@ -424,8 +420,8 @@ bool run_gemm_test_prec_type(ck_tile::ArgParser& arg_parser)
     using Row = ck_tile::tensor_layout::gemm::RowMajor;
     using Col = ck_tile::tensor_layout::gemm::ColumnMajor;
 
-    return run_gemm_test_with_layouts<GemmConfig, TypeConfig, QuantGroupSize>(
-        arg_parser, Row{}, Row{}, Col{}, Row{});
+    return run_gemm_test_with_layouts<GemmConfig, TypeConfig, QuantGroupSize, Row, Row, Col, Row>(
+        arg_parser);
 }
 
 template <typename GemmConfig, typename TypeConfig, uint32_t QuantGroupSize>
