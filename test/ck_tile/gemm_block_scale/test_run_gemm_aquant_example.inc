@@ -419,33 +419,13 @@ bool run_gemm_test_with_layouts(ck_tile::ArgParser& arg_parser,
 }
 
 template <typename GemmConfig, typename TypeConfig, uint32_t QuantGroupSize>
-bool run_gemm_test_prec_type(std::string a_layout,
-                             std::string b_layout,
-                             ck_tile::ArgParser& arg_parser)
+bool run_gemm_test_prec_type(ck_tile::ArgParser& arg_parser)
 {
     using Row = ck_tile::tensor_layout::gemm::RowMajor;
     using Col = ck_tile::tensor_layout::gemm::ColumnMajor;
 
-    if constexpr(std::is_same_v<typename TypeConfig::ADataType, ck_tile::pk_int4_t> ||
-                 std::is_same_v<typename TypeConfig::ADataType, ck_tile::fp8_t> ||
-                 std::is_same_v<typename TypeConfig::ADataType, ck_tile::bf8_t>)
-    {
-        if(a_layout == "R" && b_layout == "C")
-        {
-            return run_gemm_test_with_layouts<GemmConfig, TypeConfig, QuantGroupSize>(
-                arg_parser, Row{}, Row{}, Col{}, Row{});
-        }
-        else
-        {
-            throw std::runtime_error("Unsupported memory layout for the input matrices!");
-        }
-    }
-    else
-    {
-        throw std::runtime_error("Unsupported data type for A.");
-    }
-
-    return true;
+    return run_gemm_test_with_layouts<GemmConfig, TypeConfig, QuantGroupSize>(
+        arg_parser, Row{}, Row{}, Col{}, Row{});
 }
 
 template <typename GemmConfig, typename TypeConfig, uint32_t QuantGroupSize>
@@ -455,11 +435,7 @@ bool run_gemm_test(int argc, char* argv[])
     if(!result)
         return false;
 
-    std::string a_layout = arg_parser.get_str("a_layout");
-    std::string b_layout = arg_parser.get_str("b_layout");
-
-    return run_gemm_test_prec_type<GemmConfig, TypeConfig, QuantGroupSize>(
-        a_layout, b_layout, arg_parser);
+    return run_gemm_test_prec_type<GemmConfig, TypeConfig, QuantGroupSize>(arg_parser);
 }
 
 template <typename APrecType,
@@ -502,11 +478,12 @@ int run_gemm_combinations()
                                                         }};
 
     // We'll store all our arguments as strings first
-    std::vector<std::string> arg_strings = {"test_tile_gemm_aquant_basic",
-                                            "", // m placeholder
-                                            "", // n placeholder
-                                            "", // k placeholder
-                                            };
+    std::vector<std::string> arg_strings = {
+        "test_tile_gemm_aquant_basic",
+        "", // m placeholder
+        "", // n placeholder
+        "", // k placeholder
+    };
 
     // Create an array of const char pointers for argv
     constexpr size_t ARG_COUNT   = 4;
