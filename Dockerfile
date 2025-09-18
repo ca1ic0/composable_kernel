@@ -6,22 +6,17 @@ ARG compiler_commit=""
 ARG CK_SCCACHE=""
 ARG DEB_ROCM_REPO=http://repo.radeon.com/rocm/apt/.apt_$ROCMVERSION/
 ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=DontWarn
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Add rocm repository
 RUN set -xe && \
-    apt-get update && apt-get install -y --allow-unauthenticated apt-utils wget gnupg2 curl && \
-    curl -fsSL https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/rocm-keyring.gpg
+    apt-get update && apt-get install -y --allow-unauthenticated apt-utils wget gnupg2 curl
 
-RUN if [ "$ROCMVERSION" != "7.1" ]; then \
-        sh -c "wget https://repo.radeon.com/amdgpu-install/7.0/ubuntu/jammy/amdgpu-install_7.0.70000-1_all.deb  --no-check-certificate" && \
-        apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-unauthenticated ./amdgpu-install_7.0.70000-1_all.deb && \
-        wget -qO - http://repo.radeon.com/rocm/rocm.gpg.key | apt-key add - && \
-        sh -c "echo deb [arch=amd64 signed-by=/etc/apt/trusted.gpg.d/rocm-keyring.gpg] $DEB_ROCM_REPO jammy main > /etc/apt/sources.list.d/rocm.list" && \
-        sh -c 'echo deb [arch=amd64 signed-by=/etc/apt/trusted.gpg.d/rocm-keyring.gpg] https://repo.radeon.com/amdgpu/$ROCMVERSION/ubuntu jammy main > /etc/apt/sources.list.d/amdgpu.list'; \
-    fi
-
-RUN sh -c "echo deb http://mirrors.kernel.org/ubuntu jammy main universe | tee -a /etc/apt/sources.list" && \
-    amdgpu-install -y --usecase=rocm --no-dkms
+RUN wget https://repo.radeon.com/amdgpu-install/7.0.1/ubuntu/noble/amdgpu-install_7.0.1.70001-1_all.deb && \
+    apt install ./amdgpu-install_7.0.1.70001-1_all.deb -y && \
+    apt update && \
+    apt install python3-setuptools python3-wheel -y && \
+    apt install rocm -y
 
 ## Sccache binary built from source for ROCm, only install if CK_SCCACHE is defined
 ARG SCCACHE_REPO_URL=http://compute-artifactory.amd.com/artifactory/rocm-generic-experimental/rocm-sccache
