@@ -469,9 +469,32 @@ struct CShuffleEpilogue
 
         static_for<0, MRepeat, 1>{}([&](auto mIter) {
             // Slice accumulators for this M repeat into the permuted layout
-            shuffle_acc.get_thread_buffer() = o_acc_tile.get_y_sliced_thread_data(
+
+            // static_assert(MRepeat == 2, "CShuffleEpilogue: MRepeat must be 4"); // 8,4 Works 2
+            // doesnt work static_assert(NRepeat == 2, "CShuffleEpilogue: NRepeat must be 4"); //
+            // 2,4 Works 2 doesnt work
+
+            // Below are supported
+            // 2,2,1 - 16,16,16 / 16,16,32
+            // 1,4,1
+            // 4,1,1
+
+            const auto sliced_thread_data = o_acc_tile.get_y_sliced_thread_data(
                 merge_sequences(sequence<mIter, 0>{}, c_warp_y_index_zeros),
                 merge_sequences(sequence<1, NRepeat>{}, c_warp_y_lengths));
+
+            // This fails for PermuteN = true when
+            // MRepeat = 2
+            // NRepeat = 2
+            // gemm_preshuffle_single_fp16_rcr_preshufflev2_cshuffle_intrawave_False_False_False_False_128x128x128_2x2x1_32x32x16
+
+            // It works good for below instances
+            // gemm_preshuffle_single_fp16_rcr_preshufflev2_cshuffle_intrawave_False_False_False_False_128x128x128_2x2x1_16x16x16
+            // gemm_preshuffle_single_fp16_rcr_preshufflev2_cshuffle_intrawave_False_False_False_False_128x128x128_2x2x1_16x16x32
+            static_assert(sliced_thread_data.size() == shuffle_acc.get_thread_buffer().size(),
+                          "Mismatched buffer sizes");
+
+            shuffle_acc.get_thread_buffer() = sliced_thread_data;
 
             // If scales provided, load them with identical distribution
             if constexpr(has_scales)
