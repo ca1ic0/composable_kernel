@@ -4,7 +4,7 @@
 #pragma once
 
 #include "ck_tile/core.hpp"
-#include "ck_tile/ops/gemm/pipeline/gemm_universal_pipeline_ag_bg_cr_policy.hpp"
+#include "ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_comp_v4_default_policy.hpp"
 #include "ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_scheduler.hpp"
 #include "ck_tile/ops/gemm/pipeline/gemm_pipeline_ag_bg_cr_base.hpp"
 
@@ -95,7 +95,7 @@ struct BaseGemmPipelineAgBgCrCompV3
 // LocalPreFillStages: 1
 // LocalPreFetchStages: 1
 // LocalSharedMemoryBuffer: 1
-template <typename Problem, typename Policy = UniversalGemmPipelineAgBgCrPolicy>
+template <typename Problem, typename Policy = GemmPipelineAgBgCrCompV4DefaultPolicy>
 struct GemmPipelineAgBgCrCompV3 : public BaseGemmPipelineAgBgCrCompV3<Problem>
 {
     using Base             = BaseGemmPipelineAgBgCrCompV3<Problem>;
@@ -447,14 +447,44 @@ struct GemmPipelineAgBgCrCompV3 : public BaseGemmPipelineAgBgCrCompV3<Problem>
             // A DRAM tile window for load
             // A LDS tile window for store
             // A LDS tile for block GEMM
-            auto&& [a_copy_dram_window, a_copy_lds_window, a_lds_gemm_window] =
-                Base::GetAWindows(a_dram_block_window_tmp, a_lds_block, a_lds_load_tile_distr);
+            auto a_copy_dram_window = generate_tuple(
+                [&](auto idx) {
+                    return make_tile_window(
+                        a_dram_block_window_tmp[number<idx>{}].get_bottom_tensor_view(),
+                        make_tuple(number<MPerBlock>{}, number<KPerBlock>{}),
+                        a_dram_block_window_tmp[number<idx>{}].get_window_origin(),
+                        Policy::template MakeADramTileDistribution<Problem>());
+                },
+                number<AsLayout::size()>{});
 
             // B DRAM tile window for load
             // B LDS tile window for store
             // B LDS tile for block GEMM
-            auto&& [b_copy_dram_window, b_copy_lds_window, b_lds_gemm_window] =
-                Base::GetBWindows(b_dram_block_window_tmp, b_lds_block, b_lds_load_tile_distr);
+            auto b_copy_dram_window = generate_tuple(
+                [&](auto idx) {
+                    return make_tile_window(
+                        b_dram_block_window_tmp[number<idx>{}].get_bottom_tensor_view(),
+                        make_tuple(number<NPerBlock>{}, number<KPerBlock>{}),
+                        b_dram_block_window_tmp[number<idx>{}].get_window_origin(),
+                        Policy::template MakeBDramTileDistribution<Problem>());
+                },
+                number<AsLayout::size()>{});
+
+            constexpr auto a_lds_shape = []() {
+                if constexpr(is_a_load_tr_v())
+                    return make_tuple(number<KPerBlock>{}, number<MPerBlock>{});
+                else
+                    return make_tuple(number<MPerBlock>{}, number<KPerBlock>{});
+            }();
+            auto a_copy_lds_window = make_tile_window(a_lds_block, a_lds_shape, {0, 0});
+
+            constexpr auto b_lds_shape = []() {
+                if constexpr(is_b_load_tr_v())
+                    return make_tuple(number<KPerBlock>{}, number<NPerBlock>{});
+                else
+                    return make_tuple(number<NPerBlock>{}, number<KPerBlock>{});
+            }();
+            auto b_copy_lds_window = make_tile_window(b_lds_block, b_lds_shape, {0, 0});
 
             // Block GEMM
             auto block_gemm   = BlockGemm();
@@ -524,8 +554,43 @@ struct GemmPipelineAgBgCrCompV3 : public BaseGemmPipelineAgBgCrCompV3<Problem>
             move_tile_window(b_copy_dram_window, b_dram_tile_window_step);
 
             block_sync_lds();
-            block_gemm.LocalPrefetch(
-                a_lds_gemm_window, b_lds_gemm_window, is_a_load_tr_v, is_b_load_tr_v);
+
+            using ALdsTile =
+                decltype(make_static_distributed_tensor<ADataType>(a_lds_load_tile_distr));
+            using BLdsTile =
+                decltype(make_static_distributed_tensor<BDataType>(b_lds_load_tile_distr));
+            ALdsTile a_lds_gemm_window;
+            BLdsTile b_lds_gemm_window;
+
+            constexpr auto a_lds_input_tile_distr = [&]() {
+                if constexpr(is_a_load_tr_v())
+                    return make_static_tile_distribution(
+                        typename InputTileDistributionTraits<
+                            decltype(BlockGemm::MakeABlockDistributionEncode()),
+                            typename Problem::ADataType>::TransposedDstrEncode{});
+                else
+                    return a_lds_load_tile_distr;
+            }();
+            constexpr auto b_lds_input_tile_distr = [&]() {
+                if constexpr(is_b_load_tr_v())
+                    return make_static_tile_distribution(
+                        typename InputTileDistributionTraits<
+                            decltype(BlockGemm::MakeBBlockDistributionEncode()),
+                            typename Problem::BDataType>::TransposedDstrEncode{});
+                else
+                    return b_lds_load_tile_distr;
+            }();
+            auto a_lds_ld_window =
+                make_tile_window(a_lds_block, a_lds_shape, {0, 0}, a_lds_input_tile_distr);
+            auto b_lds_ld_window =
+                make_tile_window(b_lds_block, b_lds_shape, {0, 0}, b_lds_input_tile_distr);
+
+            static_assert(!is_tile_window_linear_v<decltype(a_lds_ld_window)> &&
+                              !is_tile_window_linear_v<decltype(b_lds_ld_window)>,
+                          "LDS windows must not be linear");
+
+            Base::LocalPrefetch(a_lds_gemm_window, a_lds_ld_window, is_a_load_tr_v);
+            Base::LocalPrefetch(b_lds_gemm_window, b_lds_ld_window, is_b_load_tr_v);
 
             __builtin_amdgcn_sched_barrier(0);
 
@@ -572,8 +637,8 @@ struct GemmPipelineAgBgCrCompV3 : public BaseGemmPipelineAgBgCrCompV3<Problem>
 
                     block_sync_lds();
 
-                    block_gemm.LocalPrefetch(
-                        a_lds_gemm_window, b_lds_gemm_window, is_a_load_tr_v, is_b_load_tr_v);
+                    Base::LocalPrefetch(a_lds_gemm_window, a_lds_ld_window, is_a_load_tr_v);
+                    Base::LocalPrefetch(b_lds_gemm_window, b_lds_ld_window, is_b_load_tr_v);
                     HotLoopScheduler();
                     __builtin_amdgcn_sched_barrier(0);
 
@@ -615,8 +680,8 @@ struct GemmPipelineAgBgCrCompV3 : public BaseGemmPipelineAgBgCrCompV3<Problem>
                     Base::LocalPrefill(b_copy_lds_window, elementwise_Bs_res);
                 }
                 block_sync_lds();
-                block_gemm.LocalPrefetch(
-                    a_lds_gemm_window, b_lds_gemm_window, is_a_load_tr_v, is_b_load_tr_v);
+                Base::LocalPrefetch(a_lds_gemm_window, a_lds_ld_window, is_a_load_tr_v);
+                Base::LocalPrefetch(b_lds_gemm_window, b_lds_ld_window, is_b_load_tr_v);
                 block_gemm(c_block_tile, a_lds_gemm_window, b_lds_gemm_window);
             }
             // __builtin_amdgcn_sched_barrier(0);
