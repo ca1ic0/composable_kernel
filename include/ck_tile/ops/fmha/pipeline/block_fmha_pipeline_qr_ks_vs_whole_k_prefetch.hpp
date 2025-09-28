@@ -63,12 +63,8 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
         kPadHeadDimQ ? 1 : Policy::template GetAlignmentQ<Problem>();
     static constexpr index_t kAlignmentK =
         kPadHeadDimQ ? 1 : Policy::template GetAlignmentK<Problem>();
-    static constexpr index_t kAlignmentV = []() {
-        if constexpr(std::is_same_v<VLayout, ck_tile::tensor_layout::gemm::RowMajor>)
-            return Problem::kPadHeadDimV ? 1 : Policy::template GetAlignmentV<Problem>();
-        else
-            return kPadSeqLenK ? 1 : Policy::template GetAlignmentV<Problem>();
-    }();
+    static constexpr index_t kAlignmentV =
+        Problem::kPadHeadDimV ? 1 : Policy::template GetAlignmentV<Problem>();
 
     static constexpr index_t kAlignmentO =
         kPadHeadDimV ? 1 : Policy::template GetAlignmentO<Problem>();
@@ -194,7 +190,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
         static_assert(NumKLdsBuffers >= 2);
 
         auto q_dram_window = make_tile_window(q_dram_block_window_tmp.get_bottom_tensor_view(),
-                                              q_dram_block_window_tmp.get_window_lengths(),
+                                              make_tuple(number<kM0>{}, number<kSubQKHeaddim>{}),
                                               q_dram_block_window_tmp.get_window_origin(),
                                               Policy::template MakeQRegTileDistribution<Problem>());
 
@@ -204,12 +200,12 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
 
         auto k_dram_block_window =
             make_tile_window(k_dram_block_window_tmp.get_bottom_tensor_view(),
-                             k_dram_block_window_tmp.get_window_lengths(),
+                             make_tuple(number<kN0>{}, number<kSubQKHeaddim>{}),
                              {seqlen_k_start, 0});
 
         auto k_dram_window =
             make_tile_window(k_dram_block_window.get_bottom_tensor_view(),
-                             k_dram_block_window.get_window_lengths(),
+                             make_tuple(number<kN0>{}, number<kK0>{}),
                              k_dram_block_window.get_window_origin(),
                              Policy::template MakeKDramTileDistribution<Problem>());
 
@@ -248,7 +244,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
 
         auto v_dram_window =
             make_tile_window(v_dram_block_window_tmp.get_bottom_tensor_view(),
-                             v_dram_block_window_tmp.get_window_lengths(),
+                             make_tuple(number<kN1>{}, number<kK1>{}),
                              {0, seqlen_k_start}, // TODO: hdim split?
                              Policy::template MakeVDramTileDistribution<Problem>());
         // V tile in LDS
@@ -329,7 +325,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
             make_tile_window(bias_dram_block_window_tmp.get_bottom_tensor_view(),
                              bias_dram_block_window_tmp.get_window_lengths(),
                              {bias_origin.at(number<0>{}), seqlen_k_start}, // M/N
-                             Policy::template MakeBiasDramTileDistribution<decltype(gemm_0)>());
+                             Policy::template MakeBiasDramTileDistribution<Problem>());
 
         auto randval_dram_window = dropout.template MakeRandvalDramWindow<decltype(gemm_0)>(
             randval_dram_block_window_tmp, seqlen_k_start);
@@ -727,21 +723,12 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
 
             __builtin_amdgcn_sched_barrier(0x7f);
 
-            if constexpr(std::is_same_v<VLayout, ck_tile::tensor_layout::gemm::RowMajor>)
-            {
-                auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
-                    Policy::template MakeShuffledVRegBlockDescriptor<Problem>());
-                shuffle_tile(v_shuffle_tmp, v_tiles[I0]);
+            auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
+                Policy::template MakeShuffledVRegTileDistribution<Problem>());
+            shuffle_tile(v_shuffle_tmp, v_tiles[I0]);
 
-                store_tile(
-                    v_lds_windows[I0],
-                    tile_elementwise_in(v_element_func, v_shuffle_tmp)); // store the prefetch
-            }
-            else
-            {
-                store_tile(v_lds_windows[I0],
-                           tile_elementwise_in(v_element_func, v_tiles[I0])); // store the prefetch
-            }
+            store_tile(v_lds_windows[I0],
+                       tile_elementwise_in(v_element_func, v_shuffle_tmp)); // store the prefetch
 
             __builtin_amdgcn_sched_barrier(0);
 
@@ -774,20 +761,11 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                                    p, sequence<0, i_k1 * kK1>{}, sequence<kM0, (i_k1 + 1) * kK1>{}),
                                v_lds_windows[number<i_k1 % NumVLdsBuffers>{}]);
 
-                        if constexpr(std::is_same_v<VLayout,
-                                                    ck_tile::tensor_layout::gemm::RowMajor>)
-                        {
-                            auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
-                                Policy::template MakeShuffledVRegBlockDescriptor<Problem>());
-                            shuffle_tile(v_shuffle_tmp, v_tiles[I0]);
-                            store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
-                                       tile_elementwise_in(v_element_func, v_shuffle_tmp));
-                        }
-                        else
-                        {
-                            store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
-                                       tile_elementwise_in(v_element_func, v_tiles[I0]));
-                        }
+                        auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
+                            Policy::template MakeShuffledVRegTileDistribution<Problem>());
+                        shuffle_tile(v_shuffle_tmp, v_tiles[I0]);
+                        store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
+                                   tile_elementwise_in(v_element_func, v_shuffle_tmp));
 
                         move_tile_window(v_dram_window, {0, kK1});
                     });
@@ -808,7 +786,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                                                     ck_tile::tensor_layout::gemm::RowMajor>)
                         {
                             auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
-                                Policy::template MakeShuffledVRegBlockDescriptor<Problem>());
+                                Policy::template MakeShuffledVRegTileDistribution<Problem>());
                             shuffle_tile(v_shuffle_tmp,
                                          v_tiles[number<(i_k1 + 1) % NumPrefetchV>{}]);
                             store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
