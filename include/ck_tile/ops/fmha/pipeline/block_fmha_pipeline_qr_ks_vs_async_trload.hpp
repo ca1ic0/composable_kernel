@@ -728,9 +728,14 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
             }
         }
 
+        const index_t warp_id = get_warp_id();
+        const index_t lane_id = get_lane_id();
+
+        const auto partition_index = multi_index<2>{warp_id, lane_id};
         // Q tile in LDS
-        auto q_dram_window = make_tile_window(
-            q_dram_block_window_tmp, Policy::template MakeQDramTileDistribution<Problem>());
+        auto q_dram_window = make_tile_window(q_dram_block_window_tmp,
+                                              Policy::template MakeQDramTileDistribution<Problem>(),
+                                              partition_index);
 
         auto q_lds_write_view = make_tensor_view<address_space_enum::lds>(
             static_cast<QDataType*>(smem_ptrk0),
@@ -749,7 +754,8 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
             make_tile_window(q_lds_read_view,
                              Policy::template MakeQLdsBlockDescriptor<Problem>().get_lengths(),
                              {0, 0},
-                             Policy::template MakeQRegTileDistribution<Problem>());
+                             Policy::template MakeQRegTileDistribution<Problem>(),
+                             partition_index);
 
         async_load_tile(q_lds_store_window, q_dram_window);
         block_sync_lds_direct_load<0>();
@@ -764,8 +770,10 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
         // physical_seqlen_k_start, logical_seqlen_k_start <= physical_seqlen_k_start
         const index_t aligned_physical_seqlen_k_start = physical_seqlen_k_start;
 
-        auto k_dram_window = make_tile_window(
-            k_dram_block_window_tmp, Policy::template MakeKDramTileDistribution<Problem, true>());
+        auto k_dram_window =
+            make_tile_window(k_dram_block_window_tmp,
+                             Policy::template MakeKDramTileDistribution<Problem, true>(),
+                             partition_index);
 
         auto k_lds_write_views =
             make_tuple(make_tensor_view<address_space_enum::lds>(
@@ -795,15 +803,18 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
             make_tuple(make_tile_window(k_lds_read_views.at(I0),
                                         make_tuple(number<kN0>{}, number<kK0>{}),
                                         {0, 0},
-                                        Policy::template MakeKRegTileDistribution<Problem>()),
+                                        Policy::template MakeKRegTileDistribution<Problem>(),
+                                        partition_index),
                        make_tile_window(k_lds_read_views.at(I1),
                                         make_tuple(number<kN0>{}, number<kK0>{}),
                                         {0, 0},
-                                        Policy::template MakeKRegTileDistribution<Problem>()));
+                                        Policy::template MakeKRegTileDistribution<Problem>(),
+                                        partition_index));
 
         // V tile in LDS
-        auto v_dram_window = make_tile_window(
-            v_dram_block_window_tmp, Policy::template MakeVDramTileDistribution<Problem>());
+        auto v_dram_window = make_tile_window(v_dram_block_window_tmp,
+                                              Policy::template MakeVDramTileDistribution<Problem>(),
+                                              partition_index);
 
         auto v_lds_write_views = make_tuple(
             make_tensor_view<address_space_enum::lds>(
@@ -833,11 +844,13 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
             make_tuple(make_tile_window(v_lds_read_views.at(I0),
                                         make_tuple(number<kN0>{}, number<kN1>{}),
                                         {0, 0},
-                                        Policy::template MakeVRegTileDistribution<Problem>()),
+                                        Policy::template MakeVRegTileDistribution<Problem>(),
+                                        partition_index),
                        make_tile_window(v_lds_read_views.at(I1),
                                         make_tuple(number<kN0>{}, number<kN1>{}),
                                         {0, 0},
-                                        Policy::template MakeVRegTileDistribution<Problem>()));
+                                        Policy::template MakeVRegTileDistribution<Problem>(),
+                                        partition_index));
 
         // We want S and P could reuse the same register buffer.
         union sp_compute_type
@@ -1017,19 +1030,19 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
                         exp2(sp_tile.at(acc_regidx).sp_compute_tile[i_j_idx]);
                 });
             });
-           
+
             block_sync_lds_direct_load<k_vmem_insts + v_vmem_insts>();
             kv_tile.k_tile = load_tile(k_lds_read_windows.at(acc_regidx));
-             __builtin_amdgcn_sched_barrier(0);
+            __builtin_amdgcn_sched_barrier(0);
         };
 
         do
         {
             // if(i_total_loops % 2 == 0)
-                mainloop(I1);
-                i_total_loops+=1;
+            mainloop(I1);
+            i_total_loops += 1;
             // if(i_total_loops % 2 == 1)
-                mainloop(I0);
+            mainloop(I0);
 
             i_total_loops += 1;
         } while(i_total_loops < num_total_loop);
