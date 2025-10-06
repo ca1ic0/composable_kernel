@@ -59,13 +59,15 @@ struct WeightPreshufflePipelineAGmemBGmemCRegV1
     static constexpr index_t flatKPerWarp = BlockGemmShape::flatKPerWarp;
     static constexpr index_t flatNPerWarp = BlockGemmShape::flatNPerWarp;
 
+    template <bool IsWave32Host = false>
     static constexpr index_t GetVectorSizeA()
     {
-        return PipelinePolicy::template GetVectorSizeA<Problem>();
+        return PipelinePolicy::template GetVectorSizeA<Problem, IsWave32Host>();
     }
+    template <bool IsWave32Host = false>
     static constexpr index_t GetVectorSizeB()
     {
-        return PipelinePolicy::template GetVectorSizeB<Problem>();
+        return PipelinePolicy::template GetVectorSizeB<Problem, IsWave32Host>();
     }
 
     static constexpr bool kPadM = Problem::kPadM;
@@ -187,11 +189,11 @@ struct WeightPreshufflePipelineAGmemBGmemCRegV1
     }
 
     template <typename ADramBlockWindowTmp, typename BFlatBlockWindowTmp, typename AElementFunction>
-    CK_TILE_HOST_DEVICE auto operator()(const ADramBlockWindowTmp& a_dram_block_window_tmp,
-                                        const AElementFunction& a_element_func,
-                                        const BFlatBlockWindowTmp& b_flat_dram_block_window_tmp,
-                                        index_t num_loop,
-                                        void* p_smem) const
+    CK_TILE_DEVICE auto operator()(const ADramBlockWindowTmp& a_dram_block_window_tmp,
+                                   const AElementFunction& a_element_func,
+                                   const BFlatBlockWindowTmp& b_flat_dram_block_window_tmp,
+                                   index_t num_loop,
+                                   void* p_smem) const
     {
         static_assert(
             std::is_same_v<ADataType, remove_cvref_t<typename ADramBlockWindowTmp::DataType>> &&
