@@ -2202,6 +2202,9 @@ struct FmhaFwdKernel
                 }
             }();
 
+            [[maybe_unused]] const auto partition_index =
+                multi_index<2>{get_warp_id(), get_lane_id()};
+
             auto o_acc_tile = [&]() {
                 if constexpr(PrefillCase)
                 {
@@ -2217,8 +2220,6 @@ struct FmhaFwdKernel
                         typename FmhaPipeline::Problem>()];
                     __shared__ char smem_ptrv1[FmhaPipeline::Policy::template GetSmemSizeV<
                         typename FmhaPipeline::Problem>()];
-
-                    const auto partition_index = multi_index<2>{get_warp_id(), get_lane_id()};
 
                     return FmhaPipeline{}(partition_index,
                                           q_dram_window,
@@ -2273,7 +2274,7 @@ struct FmhaFwdKernel
                 make_tuple(number<FmhaPipeline::kM0>{}, number<FmhaPipeline::kN1>{}),
                 {i_m0, i_n1});
 
-            EpiloguePipeline{}(o_dram_window, o_acc_tile, nullptr);
+            EpiloguePipeline{}(o_dram_window, o_acc_tile, partition_index);
         }
     }
 };
