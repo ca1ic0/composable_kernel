@@ -2218,7 +2218,10 @@ struct FmhaFwdKernel
                     __shared__ char smem_ptrv1[FmhaPipeline::Policy::template GetSmemSizeV<
                         typename FmhaPipeline::Problem>()];
 
-                    return FmhaPipeline{}(q_dram_window,
+                    const auto partition_index = multi_index<2>{get_warp_id(), get_lane_id()};
+
+                    return FmhaPipeline{}(partition_index,
+                                          q_dram_window,
                                           k_dram_window,
                                           v_dram_window,
                                           bias_dram_window,

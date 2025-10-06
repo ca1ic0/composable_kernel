@@ -639,7 +639,8 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
               typename LSEaccDramBlockWindowTmp,
               typename PositionEncoding>
     CK_TILE_HOST_DEVICE auto
-    operator()(const QDramBlockWindowTmp& q_dram_block_window_tmp,       // M0*K0 tile
+    operator()(multi_index<2> partition_index,
+               const QDramBlockWindowTmp& q_dram_block_window_tmp,       // M0*K0 tile
                const KDramBlockWindowTmp& k_dram_block_window_tmp,       // N0*K0 tile
                const VDramBlockWindowTmp& v_dram_block_window_tmp,       // N1*K1 tile
                const BiasDramBlockWindowTmp& bias_dram_block_window_tmp, // M0*N0 tile
@@ -728,10 +729,6 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
             }
         }
 
-        const index_t warp_id = get_warp_id();
-        const index_t lane_id = get_lane_id();
-
-        const auto partition_index = multi_index<2>{warp_id, lane_id};
         // Q tile in LDS
         auto q_dram_window = make_tile_window(q_dram_block_window_tmp,
                                               Policy::template MakeQDramTileDistribution<Problem>(),
