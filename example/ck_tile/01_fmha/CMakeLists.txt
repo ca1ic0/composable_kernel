@@ -128,7 +128,7 @@ list(APPEND FMHA_BWD_PRIVATE_COMPILE_OPTIONS -Wno-undefined-func-template)
 # Allow comparing floating points directly in order to check sentinel values
 list(APPEND FMHA_FWD_PRIVATE_COMPILE_OPTIONS -Wno-float-equal)
 list(APPEND FMHA_BWD_PRIVATE_COMPILE_OPTIONS -Wno-float-equal)
-list(APPEND FMHA_BWD_PRIVATE_COMPILE_OPTIONS --save-temps -v)
+list(APPEND FMHA_FWD_PRIVATE_COMPILE_OPTIONS --save-temps)
 
 # NOTE: this is dangerous since will change the whole kernel to flush denormals
 #       WIP with compiler team for an exp2 intrinsic..., then remove this
