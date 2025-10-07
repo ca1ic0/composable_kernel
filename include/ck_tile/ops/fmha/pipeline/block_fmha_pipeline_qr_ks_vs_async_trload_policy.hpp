@@ -143,21 +143,57 @@ struct BlockFmhaPipelineQRKSVSAsyncTrloadDefaultPolicy
     template <typename Problem, bool LoadOnce = false>
     CK_TILE_HOST_DEVICE static constexpr auto MakeKDramTileDistribution()
     {
-        using KDataType = remove_cvref_t<typename Problem::KDataType>;
-
-        constexpr index_t kBlockSize = Problem::kBlockSize;
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN0;
-        constexpr index_t kKPerBlock =
-            LoadOnce ? Problem::BlockFmhaShape::kSubQKHeaddim : Problem::BlockFmhaShape::kK0;
+        constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kK0;
+        constexpr index_t kBlockSize = Problem::kBlockSize;
+        constexpr index_t NumWarps   = Problem::BlockFmhaShape::NumWarps;
+        constexpr index_t WarpSize   = ck_tile::get_warp_size();
 
-        constexpr index_t MaxVectorSize = 16 / sizeof(KDataType);
-        constexpr index_t ElemPerThread = (kNPerBlock * kKPerBlock) / kBlockSize;
+        constexpr index_t KVector = GetAlignmentK<Problem>(); // this is for global load
 
-        constexpr index_t K1 = min(MaxVectorSize, ElemPerThread);
-        constexpr index_t K0 = kKPerBlock / K1;
-        constexpr index_t N2 = get_warp_size() / K0;
-        constexpr index_t N1 = kBlockSize / get_warp_size();
-        constexpr index_t N0 = kNPerBlock / (N2 * N1);
+        static_assert(WarpSize * KVector >= kKPerBlock && WarpSize * KVector % kKPerBlock == 0);
+        constexpr index_t LanesPerK  = kKPerBlock / KVector; // within a wave
+        constexpr index_t LaneGroups = WarpSize / LanesPerK; // within a wave
+        constexpr index_t NumIssues  = kNPerBlock / (LaneGroups * NumWarps);
+        static_assert(NumIssues == kNPerBlock * kKPerBlock / (kBlockSize * KVector));
+
+        constexpr index_t N0 = NumIssues;
+        constexpr index_t N1 = NumWarps;
+        constexpr index_t N2 = LaneGroups;
+        constexpr index_t K0 = LanesPerK;
+        constexpr index_t K1 = KVector;
+
+        return make_static_tile_distribution(
+            tile_distribution_encoding<sequence<1>,
+                                       tuple<sequence<N0, N1, N2>, sequence<K0, K1>>,
+                                       tuple<sequence<1>, sequence<1, 2>>,
+                                       tuple<sequence<1>, sequence<2, 0>>,
+                                       sequence<1, 2>,
+                                       sequence<0, 1>>{});
+    }
+
+    template <typename Problem>
+    CK_TILE_DEVICE static constexpr auto MakeVDramTileDistribution()
+    {
+        constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kK1;
+        constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kN1;
+        constexpr index_t kBlockSize = Problem::kBlockSize;
+        constexpr index_t NumWarps   = Problem::BlockFmhaShape::NumWarps;
+        constexpr index_t WarpSize   = ck_tile::get_warp_size();
+
+        constexpr index_t KVector = GetAlignmentV<Problem>(); // this is for global load
+
+        static_assert(WarpSize * KVector >= kKPerBlock && WarpSize * KVector % kKPerBlock == 0);
+        constexpr index_t LanesPerK  = kKPerBlock / KVector; // within a wave
+        constexpr index_t LaneGroups = WarpSize / LanesPerK; // within a wave
+        constexpr index_t NumIssues  = kNPerBlock / (LaneGroups * NumWarps);
+        static_assert(NumIssues == kNPerBlock * kKPerBlock / (kBlockSize * KVector));
+
+        constexpr index_t N0 = NumIssues;
+        constexpr index_t N1 = NumWarps;
+        constexpr index_t N2 = LaneGroups;
+        constexpr index_t K0 = LanesPerK;
+        constexpr index_t K1 = KVector;
 
         return make_static_tile_distribution(
             tile_distribution_encoding<sequence<1>,
@@ -304,198 +340,107 @@ struct BlockFmhaPipelineQRKSVSAsyncTrloadDefaultPolicy
         return q_lds_block_desc;
     }
 
-    template <typename Problem, bool LoadOnce = false, bool Xor = false>
+    template <typename Problem, bool LoadOnce = false, bool IsLoad = false>
     CK_TILE_HOST_DEVICE static constexpr auto MakeKLdsBlockDescriptor()
     {
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN0;
         constexpr index_t kKPerBlock =
             LoadOnce ? Problem::BlockFmhaShape::kSubQKHeaddim : Problem::BlockFmhaShape::kK0;
+        constexpr index_t kBlockSize = Problem::kBlockSize;
+        constexpr index_t NumWarps   = Problem::BlockFmhaShape::NumWarps;
+        constexpr index_t WarpSize   = ck_tile::get_warp_size();
 
         constexpr index_t kKPack = GetSmemKPackK<Problem>();
 
-        constexpr auto k_lds_block_desc = [&]() {
-            if constexpr(Xor)
-            {
-#if CK_TILE_FMHA_HANDLE_XOR_LENGTH_FOLD
-                constexpr auto LDSLayerSize  = 256 / sizeof(typename Problem::KDataType);
-                constexpr auto XorLengthFold = LDSLayerSize / kKPerBlock;
+        constexpr ck_tile::index_t kKLdsPadInBytes = 4 * 4;  // 4 dwords
+        constexpr index_t KVector                  = kKPack; // this is for global load
+        constexpr index_t kPad = kKLdsPadInBytes / sizeof(typename Problem::KDataType);
 
-                if constexpr(XorLengthFold > 1)
-                {
-                    constexpr auto k_lds_block_desc_naive = make_naive_tensor_descriptor(
-                        make_tuple(number<kNPerBlock / XorLengthFold>{},
-                                   number<LDSLayerSize / kKPack>{},
-                                   number<kKPack>{}),
-                        make_tuple(number<LDSLayerSize>{}, number<kKPack>{}, number<1>{}),
-                        number<kKPack>{},
-                        number<1>{});
+        static_assert(WarpSize * KVector >= kKPerBlock && WarpSize * KVector % kKPerBlock == 0);
+        constexpr index_t LanesPerK =
+            kKPerBlock / KVector; // how many lane (within a wave) to load K
+        constexpr index_t LaneGroups =
+            WarpSize /
+            LanesPerK; // how many groups (within a wave), they may load different N, but same K
+        constexpr index_t NumIssues = kNPerBlock / (LaneGroups * NumWarps);
+        static_assert(NumIssues == kNPerBlock * kKPerBlock / (kBlockSize * KVector));
 
-                    constexpr auto k_lds_block_desc_permuted = transform_tensor_descriptor(
-                        k_lds_block_desc_naive,
-                        make_tuple(
-                            make_xor_transform(make_tuple(number<kNPerBlock / XorLengthFold>{},
-                                                          number<LDSLayerSize / kKPack>{})),
-                            make_pass_through_transform(number<kKPack>{})),
-                        make_tuple(sequence<0, 1>{}, sequence<2>{}),
-                        make_tuple(sequence<0, 1>{}, sequence<2>{}));
+        constexpr auto k_lds_block_desc_0 =
+            make_naive_tensor_descriptor(make_tuple(number<NumIssues>{},  // n0
+                                                    number<NumWarps>{},   // n1
+                                                    number<LaneGroups>{}, // n2
+                                                    number<LanesPerK>{},  // k0
+                                                    number<KVector>{}),   // k1
+                                         make_tuple(number<NumWarps*(WarpSize * KVector + kPad)>{},
+                                                    number<WarpSize * KVector + kPad>{},
+                                                    number<kKPerBlock>{},
+                                                    number<KVector>{},
+                                                    number<1>{}),
+                                         number<KVector>{},
+                                         number<1>{});
+        static_assert(NumIssues * NumWarps * LaneGroups == kNPerBlock);
+        static_assert(LanesPerK * KVector == kKPerBlock);
+        constexpr auto k_lds_block_desc_issues_warps_lanes = transform_tensor_descriptor(
+            k_lds_block_desc_0,
+            make_tuple(make_merge_transform(make_tuple(
+                           number<NumIssues>{}, number<NumWarps>{}, number<LaneGroups>{})),
+                       make_merge_transform(make_tuple(number<LanesPerK>{}, number<KVector>{}))),
+            make_tuple(sequence<0, 1, 2>{}, sequence<3, 4>{}),
+            make_tuple(sequence<0>{}, sequence<1>{}));
 
-                    constexpr auto k_lds_block_desc_tmp = transform_tensor_descriptor(
-                        k_lds_block_desc_permuted,
-                        make_tuple(
-                            make_pass_through_transform(number<kNPerBlock / XorLengthFold>{}),
-                            make_unmerge_transform(
-                                make_tuple(number<XorLengthFold>{}, number<kKPerBlock / kKPack>{})),
-                            make_pass_through_transform(number<kKPack>{})),
-                        make_tuple(sequence<0>{}, sequence<1>{}, sequence<2>{}),
-                        make_tuple(sequence<0>{}, sequence<1, 2>{}, sequence<3>{}));
-
-                    return transform_tensor_descriptor(
-                        k_lds_block_desc_tmp,
-                        make_tuple(
-                            make_merge_transform_v3_division_mod(make_tuple(
-                                number<kNPerBlock / XorLengthFold>{}, number<XorLengthFold>{})),
-                            make_merge_transform_v3_division_mod(
-                                make_tuple(number<kNPerBlock / kKPack>{}, number<kKPack>{}))),
-                        make_tuple(sequence<0, 1>{}, sequence<2, 3>{}),
-                        make_tuple(sequence<0>{}, sequence<1>{}));
-                }
-                else
-#endif // CK_TILE_FMHA_HANDLE_XOR_LENGTH_FOLD
-                {
-                    constexpr auto k_lds_block_desc_naive = make_naive_tensor_descriptor(
-                        make_tuple(
-                            number<kNPerBlock>{}, number<kKPerBlock / kKPack>{}, number<kKPack>{}),
-                        make_tuple(number<kKPerBlock>{}, number<kKPack>{}, number<1>{}),
-                        number<kKPack>{},
-                        number<1>{});
-
-                    constexpr auto k_lds_block_desc_permuted = transform_tensor_descriptor(
-                        k_lds_block_desc_naive,
-                        make_tuple(make_xor_transform(make_tuple(number<kNPerBlock>{},
-                                                                 number<kKPerBlock / kKPack>{})),
-                                   make_pass_through_transform(number<kKPack>{})),
-                        make_tuple(sequence<0, 1>{}, sequence<2>{}),
-                        make_tuple(sequence<0, 1>{}, sequence<2>{}));
-
-                    return transform_tensor_descriptor(
-                        k_lds_block_desc_permuted,
-                        make_tuple(make_pass_through_transform(number<kNPerBlock>{}),
-                                   make_merge_transform_v3_division_mod(make_tuple(
-                                       number<kKPerBlock / kKPack>{}, number<kKPack>{}))),
-                        make_tuple(sequence<0>{}, sequence<1, 2>{}),
-                        make_tuple(sequence<0>{}, sequence<1>{}));
-                }
-            }
-            else
-            {
-                return make_naive_tensor_descriptor(
-                    make_tuple(number<kNPerBlock>{}, number<kKPerBlock>{}),
-                    make_tuple(number<kKPerBlock>{}, number<1>{}),
-                    number<kKPack>{},
-                    number<1>{});
-            }
-        }();
-
-        return k_lds_block_desc;
+        return k_lds_block_desc_issues_warps_lanes;
     }
 
-    template <typename Problem, bool Xor = false>
+    template <typename Problem, bool IsLoad = false>
     CK_TILE_HOST_DEVICE static constexpr auto MakeVLdsBlockDescriptor()
     {
         constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN1;
         constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kN0;
+        constexpr index_t kBlockSize = Problem::kBlockSize;
+        constexpr index_t NumWarps   = Problem::BlockFmhaShape::NumWarps;
+        constexpr index_t WarpSize   = ck_tile::get_warp_size();
 
-        constexpr index_t kKPack = GetSmemKPackV<Problem>();
+        constexpr index_t kKPack                   = GetSmemKPackV<Problem>();
+        constexpr index_t NVector                  = kKPack; // this is for global load
+        constexpr ck_tile::index_t kVLdsPadInBytes = 4 * 16; // 16 dwords
+        constexpr index_t kPad =
+            kVLdsPadInBytes /
+            sizeof(typename Problem::VDataType); // for async-copy, this pad is between warps
 
-        constexpr auto v_lds_block_desc = [&]() {
-            if constexpr(Xor)
-            {
-                constexpr auto XorGroupSize =
-                    Problem::BlockFmhaShape::Gemm1WarpTile::at(number<0>{});
+        static_assert(WarpSize * NVector >= kNPerBlock && WarpSize * NVector % kNPerBlock == 0);
+        constexpr index_t LanesPerN =
+            kNPerBlock / NVector; // how many lane (within a wave) to load K
+        constexpr index_t LaneGroups =
+            WarpSize /
+            LanesPerN; // how many groups (within a wave), they may load different N, but same K
+        constexpr index_t NumIssues = kKPerBlock / (LaneGroups * NumWarps);
+        static_assert(NumIssues == kNPerBlock * kKPerBlock / (kBlockSize * NVector));
 
-#if CK_TILE_FMHA_HANDLE_XOR_LENGTH_FOLD
-                constexpr auto LDSLayerSize  = 256 / sizeof(typename Problem::VDataType);
-                constexpr auto XorLengthFold = LDSLayerSize / kNPerBlock;
+        constexpr auto v_lds_block_desc_0 =
+            make_naive_tensor_descriptor(make_tuple(number<NumIssues>{},  // n0
+                                                    number<NumWarps>{},   // n1
+                                                    number<LaneGroups>{}, // n2
+                                                    number<LanesPerN>{},  // k0
+                                                    number<NVector>{}),   // k1
+                                         make_tuple(number<NumWarps*(WarpSize * NVector + kPad)>{},
+                                                    number<WarpSize * NVector + kPad>{},
+                                                    number<kNPerBlock>{},
+                                                    number<NVector>{},
+                                                    number<1>{}),
+                                         number<NVector>{},
+                                         number<1>{});
 
-                if constexpr(XorLengthFold > 1)
-                {
-                    constexpr auto v_lds_block_desc_naive = make_naive_tensor_descriptor(
-                        make_tuple(number<kKPerBlock / XorLengthFold>{},
-                                   number<LDSLayerSize / XorGroupSize>{},
-                                   number<XorGroupSize>{}),
-                        make_tuple(number<LDSLayerSize>{}, number<XorGroupSize>{}, number<1>{}),
-                        number<kKPack>{},
-                        number<1>{});
+        static_assert(NumIssues * NumWarps * LaneGroups == kKPerBlock);
+        static_assert(LanesPerN * NVector == kNPerBlock);
+        constexpr auto v_lds_block_desc_issues_warps_lanes = transform_tensor_descriptor(
+            v_lds_block_desc_0,
+            make_tuple(make_merge_transform(make_tuple(
+                           number<NumIssues>{}, number<NumWarps>{}, number<LaneGroups>{})),
+                       make_merge_transform(make_tuple(number<LanesPerN>{}, number<NVector>{}))),
+            make_tuple(sequence<0, 1, 2>{}, sequence<3, 4>{}),
+            make_tuple(sequence<0>{}, sequence<1>{}));
 
-                    constexpr auto v_lds_block_desc_permuted = transform_tensor_descriptor(
-                        v_lds_block_desc_naive,
-                        make_tuple(
-                            make_xor_transform(make_tuple(number<kKPerBlock / XorLengthFold>{},
-                                                          number<LDSLayerSize / XorGroupSize>{})),
-                            make_pass_through_transform(number<XorGroupSize>{})),
-                        make_tuple(sequence<0, 1>{}, sequence<2>{}),
-                        make_tuple(sequence<0, 1>{}, sequence<2>{}));
-
-                    constexpr auto v_lds_block_desc_tmp = transform_tensor_descriptor(
-                        v_lds_block_desc_permuted,
-                        make_tuple(
-                            make_pass_through_transform(number<kKPerBlock / XorLengthFold>{}),
-                            make_unmerge_transform(make_tuple(number<XorLengthFold>{},
-                                                              number<kNPerBlock / XorGroupSize>{})),
-                            make_pass_through_transform(number<XorGroupSize>{})),
-                        make_tuple(sequence<0>{}, sequence<1>{}, sequence<2>{}),
-                        make_tuple(sequence<0>{}, sequence<1, 2>{}, sequence<3>{}));
-
-                    return transform_tensor_descriptor(
-                        v_lds_block_desc_tmp,
-                        make_tuple(
-                            make_merge_transform_v3_division_mod(make_tuple(
-                                number<kKPerBlock / XorLengthFold>{}, number<XorLengthFold>{})),
-                            make_merge_transform_v3_division_mod(make_tuple(
-                                number<kNPerBlock / XorGroupSize>{}, number<XorGroupSize>{}))),
-                        make_tuple(sequence<0, 1>{}, sequence<2, 3>{}),
-                        make_tuple(sequence<0>{}, sequence<1>{}));
-                }
-                else
-#endif // CK_TILE_FMHA_HANDLE_XOR_LENGTH_FOLD
-                {
-                    constexpr auto v_lds_block_desc_naive = make_naive_tensor_descriptor(
-                        make_tuple(number<kKPerBlock>{},
-                                   number<kNPerBlock / XorGroupSize>{},
-                                   number<XorGroupSize>{}),
-                        make_tuple(number<kNPerBlock>{}, number<XorGroupSize>{}, number<1>{}),
-                        number<kKPack>{},
-                        number<1>{});
-
-                    constexpr auto v_lds_block_desc_permuted = transform_tensor_descriptor(
-                        v_lds_block_desc_naive,
-                        make_tuple(make_xor_transform(make_tuple(
-                                       number<kKPerBlock>{}, number<kNPerBlock / XorGroupSize>{})),
-                                   make_pass_through_transform(number<XorGroupSize>{})),
-                        make_tuple(sequence<0, 1>{}, sequence<2>{}),
-                        make_tuple(sequence<0, 1>{}, sequence<2>{}));
-
-                    return transform_tensor_descriptor(
-                        v_lds_block_desc_permuted,
-                        make_tuple(
-                            make_pass_through_transform(number<kKPerBlock>{}),
-                            make_merge_transform_v3_division_mod(make_tuple(
-                                number<kNPerBlock / XorGroupSize>{}, number<XorGroupSize>{}))),
-                        make_tuple(sequence<0>{}, sequence<1, 2>{}),
-                        make_tuple(sequence<0>{}, sequence<1>{}));
-                }
-            }
-            else
-            {
-                return make_naive_tensor_descriptor(
-                    make_tuple(number<kKPerBlock>{}, number<kNPerBlock>{}),
-                    make_tuple(number<kNPerBlock>{}, number<1>{}),
-                    number<kKPack>{},
-                    number<1>{});
-            }
-        }();
-
-        return v_lds_block_desc;
+        return v_lds_block_desc_issues_warps_lanes;
     }
 
     template <typename Problem>
@@ -609,35 +554,6 @@ struct BlockFmhaPipelineQRKSVSAsyncTrloadDefaultPolicy
     }
 
     template <typename Problem>
-    CK_TILE_DEVICE static constexpr auto MakeVDramTileDistribution()
-    {
-        constexpr index_t kBlockSize = Problem::kBlockSize;
-        constexpr index_t kNPerBlock = Problem::BlockFmhaShape::kN1;
-        constexpr index_t kKPerBlock = Problem::BlockFmhaShape::kN0;
-
-        constexpr index_t MaxVectorSize = 16 / sizeof(typename Problem::VDataType);
-
-        constexpr index_t ElemPerThread = (kNPerBlock * kKPerBlock) / kBlockSize;
-        static_assert(0 < ElemPerThread);
-        constexpr index_t kMaxVecLoad = min(ElemPerThread, MaxVectorSize);
-
-        constexpr index_t NPerThread     = kMaxVecLoad;
-        constexpr index_t NThreads       = kNPerBlock / NPerThread;
-        constexpr index_t KThreadPerWarp = get_warp_size() / NThreads;
-        constexpr index_t NumWarps       = kBlockSize / get_warp_size();
-        constexpr index_t KPerThread     = kKPerBlock / (KThreadPerWarp * NumWarps);
-
-        return make_static_tile_distribution(
-            tile_distribution_encoding<sequence<1>,
-                                       tuple<sequence<KPerThread, NumWarps, KThreadPerWarp>,
-                                             sequence<NThreads, NPerThread>>,
-                                       tuple<sequence<1>, sequence<1, 2>>,
-                                       tuple<sequence<1>, sequence<2, 0>>,
-                                       sequence<1, 2>,
-                                       sequence<0, 1>>{});
-    }
-
-    template <typename Problem>
     CK_TILE_HOST_DEVICE static constexpr auto MakePRegTileDistribution()
     {
         using BlockGemm       = remove_cvref_t<decltype(GetPVBlockGemm<Problem>())>;
@@ -662,7 +578,7 @@ struct BlockFmhaPipelineQRKSVSAsyncTrloadDefaultPolicy
                                        tuple<sequence<1, 0>>,
                                        sequence<1, 2>,
                                        sequence<0, 0>>{};
-        
+
         constexpr auto p_block_dstr_encode = detail::make_embed_tile_distribution_encoding(
             p_block_outer_dstr_encoding, typename WarpGemm::AWarpDstrEncoding{});
 
