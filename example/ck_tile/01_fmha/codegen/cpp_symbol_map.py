@@ -103,7 +103,7 @@ ROPE_CHECK_MAP = {
 
 MODE_MAP = {
     "batch" : "false",
-    "group" : "true"
+    # "group" : "true"
 }
 
 LAYOUT_MAP = {
