@@ -188,7 +188,8 @@ struct BlockGemmWeightPreshuffleBQuantARegBRegCReg
 
                     auto& scale_reg   = bq_block_tensor.get_thread_buffer()[reg_offset];
                     float scale_reg_f = cvt_scale_to_fp32(scale_reg);
-
+                    
+                    printf("scale_reg_f: %f, reg_offset: %d, get_block_id(): %d, get_warp_id(): %d, get_thread_id(): %d\n", scale_reg_f, reg_offset, get_block_id(), get_warp_id(), get_thread_id());                    
                     static_for<0, WG::kM * WG::kN / warp_size, 1>{}([&](auto c_row) {
                         c_block_tensor.get_thread_buffer()[tbuf_offset + c_row] +=
                             (c_warp_tensors(mIter)(nIter).get_thread_buffer()[c_row] * scale_reg_f);
