@@ -47,7 +47,7 @@ float gemm_calc_quant(const ck_tile::QuantGemmHostArgs& args, const ck_tile::str
                                                     QuantMode,
                                                     ALayout, // for AQLayout
                                                     BLayout, // for BQLayout
-                                                    false,
+                                                    GemmConfig::TransposeC,
                                                     GemmConfig::DoubleSmemBuffer>;
 
     using GemmPipelineProblem = ck_tile::GemmPipelineProblemBase<typename TypeConfig::ADataType,
@@ -71,7 +71,7 @@ float gemm_calc_quant(const ck_tile::QuantGemmHostArgs& args, const ck_tile::str
     const auto Run = [&](const auto has_hot_loop_, const auto tail_number_) {
         constexpr bool has_hot_loop_v = has_hot_loop_.value;
         constexpr auto tail_number_v  = tail_number_.value;
-        constexpr bool transpose_c    = false;
+        constexpr bool transpose_c    = GemmConfig::TransposeC;
 
         // row-col and tensor quants use the regular pipeline, A/B quants use their own
         using PipelineProblem = std::conditional_t<
@@ -108,6 +108,7 @@ float gemm_calc_quant(const ck_tile::QuantGemmHostArgs& args, const ck_tile::str
                                                                   GemmShape,
                                                                   GemmTraits,
                                                                   QuantGroupSize,
+                                                                  transpose_c,
                                                                   ComputeDataType,
                                                                   GemmConfig::Scheduler,
                                                                   has_hot_loop_v,
@@ -141,7 +142,11 @@ float gemm_calc_quant(const ck_tile::QuantGemmHostArgs& args, const ck_tile::str
                                              GemmConfig::N_Warp_Tile,
                                              GemmConfig::K_Warp_Tile,
                                              transpose_c,
-                                             ck_tile::memory_operation_enum::set>>;
+                                             ck_tile::memory_operation_enum::set,
+                                             1,
+                                             false,
+                                             1,
+                                             GemmConfig::TiledMMAPermuteN>>;
         using Kernel =
             ck_tile::QuantGemmKernel<TilePartitioner, GemmPipeline, GemmEpilogue, QuantMode>;
 

@@ -34,11 +34,11 @@ struct GemmBQuantPipelineAgBgCrDefaultPolicy : public UniversalGemmPipelineAgBgC
         using BQLayout       = remove_cvref_t<typename Problem::BQLayout>;
         using BlockGemmShape = typename Problem::BlockGemmShape;
 
-        constexpr index_t BlockSize   = Problem::kBlockSize;
-        constexpr index_t NPerBlock   = Problem::BlockGemmShape::kN;
-        constexpr index_t KPerBlock   = Problem::BlockGemmShape::kK;
-        constexpr index_t KPerBlockBQ = KPerBlock / Problem::kQuantGroupSize;
-        constexpr index_t VecLoadSize = GetVectorSizeBQ<Problem>();
+        constexpr index_t BlockSize   = Problem::kBlockSize; //256
+        constexpr index_t NPerBlock   = Problem::BlockGemmShape::kN;  //64
+        constexpr index_t KPerBlock   = Problem::BlockGemmShape::kK; //256
+        constexpr index_t KPerBlockBQ = KPerBlock / Problem::kQuantGroupSize; //256/128 = 2
+        constexpr index_t VecLoadSize = GetVectorSizeBQ<Problem>(); //sometimes 2 sometimes 1
         using WarpTile                = typename Problem::BlockGemmShape::WarpTile;
         using WarpGemm                = WarpGemmDispatcher<typename Problem::ComputeDataType,
                                                            typename Problem::ComputeDataType,
@@ -47,16 +47,26 @@ struct GemmBQuantPipelineAgBgCrDefaultPolicy : public UniversalGemmPipelineAgBgC
                                                            WarpTile::at(I1),
                                                            WarpTile::at(I2),
                                                            Problem::TransposeC>;
-
+        
         static_assert(std::is_same_v<BQLayout, tensor_layout::gemm::ColumnMajor>);
-        using TileEncodingPattern = tile_distribution_encoding_pattern_bq<BlockGemmShape,
-                                                                          WarpGemm,
-                                                                          BlockSize,
-                                                                          NPerBlock,
-                                                                          KPerBlockBQ,
-                                                                          VecLoadSize>;
+        if constexpr(Problem::TransposeC){
+            using TileEncodingPattern = tile_distribution_encoding_pattern_bq_transposeC<BlockGemmShape,
+                                                                            WarpGemm,
+                                                                            BlockSize,
+                                                                            NPerBlock,
+                                                                            KPerBlockBQ,
+                                                                            VecLoadSize>;
+            return TileEncodingPattern::make_2d_static_tile_distribution();
+        }else{
+            using TileEncodingPattern = tile_distribution_encoding_pattern_bq<BlockGemmShape,
+                                                                            WarpGemm,
+                                                                            BlockSize,
+                                                                            NPerBlock,
+                                                                            KPerBlockBQ,
+                                                                            VecLoadSize>;
 
-        return TileEncodingPattern::make_2d_static_tile_distribution();
+            return TileEncodingPattern::make_2d_static_tile_distribution();
+        }
     }
 
     template <typename Problem>

@@ -93,6 +93,7 @@ struct GemmConfigBase
     static constexpr bool PreshuffleQuant  = false;
     static constexpr bool PreshuffleB      = false;
     static constexpr bool DoubleSmemBuffer = false;
+    static constexpr bool TiledMMAPermuteN = false;
 };
 
 template <typename PrecType>
@@ -159,11 +160,16 @@ struct GemmConfigPreshuffleB_Bquant_decode : public GemmConfigBase
 
     static constexpr ck_tile::index_t M_Warp_Tile = 16;
     static constexpr ck_tile::index_t N_Warp_Tile = 16;
-    static constexpr ck_tile::index_t K_Warp_Tile =
+    static constexpr ck_tile::index_t K_Warp_Tile = 
         get_k_from_preshuffled_warp_tile<PrecType, M_Warp_Tile>();
 
+    static constexpr bool TransposeC       = false;
     static constexpr bool PreshuffleB      = true;
     static constexpr bool DoubleSmemBuffer = true;
+
+    static constexpr int N_Repeat              = N_Tile / N_Warp_Tile / N_Warp;
+    static constexpr bool TiledMMAPermuteN     = N_Repeat % 2 == 0;
+
 };
 
 template <typename PrecType>
@@ -182,8 +188,12 @@ struct GemmConfigPreshuffleB_Bquant_prefill : public GemmConfigBase
     static constexpr ck_tile::index_t K_Warp_Tile =
         get_k_from_preshuffled_warp_tile<PrecType, M_Warp_Tile>();
 
+    static constexpr bool TransposeC       = false;
     static constexpr bool PreshuffleB      = true;
     static constexpr bool DoubleSmemBuffer = true;
+
+    static constexpr int N_Repeat              = N_Tile / N_Warp_Tile / N_Warp;
+    static constexpr bool TiledMMAPermuteN     = N_Repeat % 2 == 0;
 };
 
 template <typename ADataType_,
@@ -274,8 +284,8 @@ auto create_args(int argc, char* argv[])
         .insert("prec",
                 "fp8",
                 "data type. For AQuant: fp8/bf8/i4fp8/i4bf8, For Bquant: fp8/bf8/fp8i4/bf8i4")
-        .insert("warmup", "50", "number of iterations before benchmark the kernel")
-        .insert("repeat", "1000", "number of iterations to benchmark the kernel")
+        .insert("warmup", "0", "number of iterations before benchmark the kernel")
+        .insert("repeat", "1", "number of iterations to benchmark the kernel")
         .insert("timer", "gpu", "gpu:gpu timer, cpu:cpu timer")
         .insert("split_k", "1", "splitK value")
         .insert("init", "0", "0:random, 1:linear, 2:constant(1)")

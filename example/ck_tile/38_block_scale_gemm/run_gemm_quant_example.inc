@@ -40,6 +40,27 @@ auto shuffle_b(const ck_tile::HostTensor<T>& t)
     return ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4});
 }
 
+template <typename GemmConfig, typename T>
+auto shuffle_b_permuteN(const ck_tile::HostTensor<T>& t)
+{
+    assert(t.get_lengths().size() == 2);
+
+    int n_                = t.get_lengths()[1];
+    int k_                = t.get_lengths()[0];
+    constexpr int divisor = GemmConfig::N_Warp_Tile == 32 ? 2 : 4;
+    constexpr int NRepeat = GemmConfig::N_Tile / GemmConfig::N_Warp_Tile / GemmConfig::N_Warp;
+
+    ck_tile::HostTensor<T> t_view({n_ / GemmConfig::N_Tile,
+                                   GemmConfig::N_Warp,
+                                   GemmConfig::N_Warp_Tile,
+                                   NRepeat,
+                                   k_ / GemmConfig::K_Warp_Tile,
+                                   divisor,
+                                   GemmConfig::K_Warp_Tile / divisor});
+    std::copy(t.begin(), t.end(), t_view.begin());
+    return ck_tile::reference_permute(t_view, {0, 3, 1, 4, 5, 2, 6});
+}
+
 template <typename GemmConfig,
           typename TypeConfig,
           typename ALayout,
@@ -301,6 +322,7 @@ int run_gemm_example_with_layouts(int argc,
             }
             ck_tile::FillUniformDistribution<BQDataType>{-2.0f, 2.0f, fill_seed(gen)}(
                 *bq_tensor_ptr);
+            //ck_tile::FillConstant<BQDataType>{static_cast<BQDataType>(2.0f)}(*bq_tensor_ptr);
             ck_tile::FillUniformDistribution<ADataType>{-5.0f, 5.0f, fill_seed(gen)}(a_m_k);
         }
         else if constexpr(QuantMode == ck_tile::QuantType::AQuantGrouped)
@@ -337,9 +359,9 @@ int run_gemm_example_with_layouts(int argc,
     {
         if constexpr(QuantMode == ck_tile::QuantType::BQuantGrouped)
         {
-            ck_tile::FillConstant<ADataType>{static_cast<ADataType>(0x38)}(a_m_k);
-            ck_tile::FillConstant<BDataType>{static_cast<BDataType>(0x22)}(b_k_n);
-            ck_tile::FillConstant<BQDataType>{static_cast<BQDataType>(0.5f)}(*bq_tensor_ptr);
+            ck_tile::FillConstant<ADataType>{static_cast<ADataType>(0x40)}(a_m_k);
+            ck_tile::FillConstant<BDataType>{static_cast<BDataType>(0x40)}(b_k_n);
+            ck_tile::FillConstant<BQDataType>{static_cast<BQDataType>(1.0f)}(*bq_tensor_ptr);
         }
         else
         {
@@ -412,24 +434,24 @@ int run_gemm_example_with_layouts(int argc,
     }
 
     ck_tile::HostTensor<BDataType> b_k_n_dev = b_k_n;
+
+    if constexpr(GemmConfig::PreshuffleB)
+    {
+        if constexpr(GemmConfig::TiledMMAPermuteN)
+        {
+            b_k_n_dev = shuffle_b_permuteN<GemmConfig>(b_k_n);
+        }
+        else
+        {
+            b_k_n_dev = shuffle_b<GemmConfig>(b_k_n);
+        }
+    }
     if constexpr(std::is_same_v<BDataType, ck_tile::pk_int4_t>)
     {
-
-        if constexpr(GemmConfig::PreshuffleB)
-        {
-            b_k_n_dev = shuffle_b<GemmConfig>(b_k_n);
-        }
         ck_tile::permute_vectors_i4x4_b(b_k_n_dev);
-        b_k_n_dev_buf.ToDevice(b_k_n_dev.data());
     }
-    else
-    {
-        if constexpr(GemmConfig::PreshuffleB)
-        {
-            b_k_n_dev = shuffle_b<GemmConfig>(b_k_n);
-        }
-        b_k_n_dev_buf.ToDevice(b_k_n_dev.data());
-    }
+
+    b_k_n_dev_buf.ToDevice(b_k_n_dev.data());
 
     c_m_n_dev_buf.SetZero();
     c_m_n_dev_result.SetZero();
