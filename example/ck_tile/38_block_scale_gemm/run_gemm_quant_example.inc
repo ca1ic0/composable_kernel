@@ -37,7 +37,25 @@ auto shuffle_b(const ck_tile::HostTensor<T>& t)
                                    divisor,
                                    GemmConfig::K_Warp_Tile / divisor});
     std::copy(t.begin(), t.end(), t_view.begin());
-    return ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4});
+    return ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4}); // {N/NWT, K/KWT, div, NWT, KWT}
+}
+
+template <typename GemmConfig, typename T>
+auto shuffle_bq_permuteN(const ck_tile::HostTensor<T>& t)
+{
+   assert(t.get_lengths().size() == 2);
+
+    int n_                  = t.get_lengths()[1];
+    int bqk_                = t.get_lengths()[0];
+    constexpr int NRepeat = GemmConfig::N_Tile / GemmConfig::N_Warp_Tile / GemmConfig::N_Warp;
+
+    ck_tile::HostTensor<T> t_view({n_ / GemmConfig::N_Tile,
+                                   GemmConfig::N_Warp,
+                                   GemmConfig::N_Warp_Tile,
+                                   NRepeat,
+                                   bqk_});
+    std::copy(t.begin(), t.end(), t_view.begin());
+    return ck_tile::reference_permute(t_view, {0, 3, 1, 4, 2}); // {N/NT, NRep, NWarp, K/KWT, div, NWT, KWT}
 }
 
 template <typename GemmConfig, typename T>
@@ -58,7 +76,7 @@ auto shuffle_b_permuteN(const ck_tile::HostTensor<T>& t)
                                    divisor,
                                    GemmConfig::K_Warp_Tile / divisor});
     std::copy(t.begin(), t.end(), t_view.begin());
-    return ck_tile::reference_permute(t_view, {0, 3, 1, 4, 5, 2, 6});
+    return ck_tile::reference_permute(t_view, {0, 3, 1, 4, 5, 2, 6}); // {N/NT, NRep, NWarp, K/KWT, div, NWT, KWT}
 }
 
 template <typename GemmConfig,
@@ -439,6 +457,7 @@ int run_gemm_example_with_layouts(int argc,
     {
         if constexpr(GemmConfig::TiledMMAPermuteN)
         {
+            printf("PreshuffleB with TiledMMAPermuteN\n");
             b_k_n_dev = shuffle_b_permuteN<GemmConfig>(b_k_n);
         }
         else
@@ -460,7 +479,15 @@ int run_gemm_example_with_layouts(int argc,
                  QuantMode == ck_tile::QuantType::RowColQuant ||
                  QuantMode == ck_tile::QuantType::TensorQuant)
     {
-        bq_dev_buf_ptr->ToDevice(bq_tensor_ptr->data());
+        if constexpr(GemmConfig::PreshuffleB && GemmConfig::TiledMMAPermuteN)
+        {
+            printf("Preshuffle BQ with TiledMMAPermuteN \n");
+            ck_tile::HostTensor<BQDataType> bq_shuffle_host =
+                shuffle_bq_permuteN<GemmConfig>(*bq_tensor_ptr);
+            bq_dev_buf_ptr->ToDevice(bq_shuffle_host.data());
+        }
+        else
+            bq_dev_buf_ptr->ToDevice(bq_tensor_ptr->data());
     }
 
     invoke_gemm<GemmConfig,
