@@ -55,7 +55,7 @@ auto shuffle_bq_permuteN(const ck_tile::HostTensor<T>& t)
                                    NRepeat,
                                    bqk_});
     std::copy(t.begin(), t.end(), t_view.begin());
-    return ck_tile::reference_permute(t_view, {0, 3, 1, 4, 2}); // {N/NT, NRep, NWarp, K/KWT, div, NWT, KWT}
+    return ck_tile::reference_permute(t_view, {0, 3, 1, 2, 4}); // {N/NT, NRep, NWarp, K/KWT, div, NWT, KWT}
 }
 
 template <typename GemmConfig, typename T>
@@ -68,13 +68,13 @@ auto shuffle_b_permuteN(const ck_tile::HostTensor<T>& t)
     constexpr int divisor = GemmConfig::N_Warp_Tile == 32 ? 2 : 4;
     constexpr int NRepeat = GemmConfig::N_Tile / GemmConfig::N_Warp_Tile / GemmConfig::N_Warp;
 
-    ck_tile::HostTensor<T> t_view({n_ / GemmConfig::N_Tile,
-                                   GemmConfig::N_Warp,
-                                   GemmConfig::N_Warp_Tile,
-                                   NRepeat,
-                                   k_ / GemmConfig::K_Warp_Tile,
-                                   divisor,
-                                   GemmConfig::K_Warp_Tile / divisor});
+    ck_tile::HostTensor<T> t_view({n_ / GemmConfig::N_Tile, //0
+                                   GemmConfig::N_Warp, //1
+                                   GemmConfig::N_Warp_Tile,  //2
+                                   NRepeat,  //3
+                                   k_ / GemmConfig::K_Warp_Tile, //4
+                                   divisor, //5
+                                   GemmConfig::K_Warp_Tile / divisor}); //6
     std::copy(t.begin(), t.end(), t_view.begin());
     return ck_tile::reference_permute(t_view, {0, 3, 1, 4, 5, 2, 6}); // {N/NT, NRep, NWarp, K/KWT, div, NWT, KWT}
 }
@@ -221,7 +221,7 @@ int run_gemm_example_with_layouts(int argc,
         if(K % QuantGroupSize != 0)
         {
             throw std::runtime_error(
-                "K must be aligned with QuantGroupSize for AQuantGrouped mode");
+                "K must be aligned with QuantGroupSize for AQuantGrouped/BQuantGrouped mode");
         }
     }
     ck_tile::index_t AQK, BQK;
@@ -243,7 +243,7 @@ int run_gemm_example_with_layouts(int argc,
     }
     else
     {
-        static_assert(false, "Unsupported QuantMode");
+        throw std::runtime_error("Unsupported QuantMode");
     }
 
     ck_tile::index_t stride_A  = arg_parser.get_int("stride_a");

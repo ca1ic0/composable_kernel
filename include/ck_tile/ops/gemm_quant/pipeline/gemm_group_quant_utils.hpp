@@ -211,8 +211,8 @@ struct tile_distribution_encoding_pattern_bq : public tile_distribution_encoding
             tile_distribution_encoding<sequence<MWarps, XR>,
                                        tuple<sequence<Y0, Y1, Y2>, sequence<X>>,
                                        tuple<sequence<0, 1>, sequence<0, 1>>,
-                                       tuple<sequence<0, 1>, sequence<1, 2>>,
-                                       sequence<1, 2>,
+                                       tuple<sequence<0, 1>, sequence<1, 2>>,  
+                                       sequence<1, 2>,      
                                        sequence<0, 0>>{});
     }
 };
