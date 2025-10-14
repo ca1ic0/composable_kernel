@@ -21,10 +21,11 @@
 
 template <typename InOutDataType,
           bool kUseCausal,
+          bool kUseSoftmax,
           bool kHasBias,
           bool kHasDropout,
           ck_tile::index_t MaxK>
-struct group_forward_causal_bias_dropout_dispatch
+struct group_forward_causal_softmax_bias_dropout_dispatch
 {
     using HstuAttentionTileSetting = typename HstuAttentionFwdTileSetting<MaxK>::Type;
 
@@ -39,6 +40,7 @@ struct group_forward_causal_bias_dropout_dispatch
         kHasBias,
         kHasDropout,
         kUseCausal,
+        kUseSoftmax,
         HstuAttentionTileSetting,
         HstuTraits>;
 
@@ -126,15 +128,17 @@ struct group_forward_causal_bias_dropout_dispatch
 
 template <typename InOutDataType,
           bool kUseCausal,
+          bool kUseSoftmax,
           bool kHasBias,
           bool kHasDropout,
           ck_tile::index_t MaxK>
-void run_group_forward_causal_bias_dropout_dispatch(HstuAttentionGroupFwdParams& param,
-                                                    hipStream_t stream)
+void run_group_forward_causal_softmax_bias_dropout_dispatch(HstuAttentionGroupFwdParams& param,
+                                                            hipStream_t stream)
 {
-    group_forward_causal_bias_dropout_dispatch<InOutDataType,
-                                               kUseCausal,
-                                               kHasBias,
-                                               kHasDropout,
-                                               MaxK>::Run(param, stream);
+    group_forward_causal_softmax_bias_dropout_dispatch<InOutDataType,
+                                                       kUseCausal,
+                                                       kUseSoftmax,
+                                                       kHasBias,
+                                                       kHasDropout,
+                                                       MaxK>::Run(param, stream);
 };

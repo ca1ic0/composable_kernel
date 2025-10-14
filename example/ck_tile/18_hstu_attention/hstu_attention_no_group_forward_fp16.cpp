@@ -20,17 +20,19 @@ void hstu_attention_no_group_forward_fp16(HstuAttentionNoGroupFwdParams& param, 
     BOOL_SWITCH_3(has_bias, kHasBias, has_dropout, kHasDropout, use_causal, kUseCausal, [&] {
         HDIM_SWITCH(param.hdim_qk, param.hdim_v, MaxK, [&] {
             if(param.is_jagged)
-                run_jagged_forward_causal_bias_dropout_dispatch<ck_tile::fp16_t,
-                                                                kUseCausal,
-                                                                kHasBias,
-                                                                kHasDropout,
-                                                                MaxK>(param, stream);
+                run_jagged_forward_causal_softmax_bias_dropout_dispatch<ck_tile::fp16_t,
+                                                                        kUseCausal,
+                                                                        false, // using softmax
+                                                                        kHasBias,
+                                                                        kHasDropout,
+                                                                        MaxK>(param, stream);
             else
-                run_batched_forward_causal_bias_dropout_dispatch<ck_tile::fp16_t,
-                                                                 kUseCausal,
-                                                                 kHasBias,
-                                                                 kHasDropout,
-                                                                 MaxK>(param, stream);
+                run_batched_forward_causal_softmax_bias_dropout_dispatch<ck_tile::fp16_t,
+                                                                         kUseCausal,
+                                                                         false, // using softmax
+                                                                         kHasBias,
+                                                                         kHasDropout,
+                                                                         MaxK>(param, stream);
         });
     });
 };

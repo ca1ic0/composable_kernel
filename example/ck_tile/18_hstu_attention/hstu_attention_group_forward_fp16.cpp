@@ -18,11 +18,12 @@ void hstu_attention_group_forward_fp16(HstuAttentionGroupFwdParams& param, hipSt
 
     BOOL_SWITCH_3(has_bias, kHasBias, has_dropout, kHasDropout, use_causal, kUseCausal, [&] {
         HDIM_SWITCH(param.hdim_qk, param.hdim_v, MaxK, [&] {
-            run_group_forward_causal_bias_dropout_dispatch<ck_tile::fp16_t,
-                                                           kUseCausal,
-                                                           kHasBias,
-                                                           kHasDropout,
-                                                           MaxK>(param, stream);
+            run_group_forward_causal_softmax_bias_dropout_dispatch<ck_tile::fp16_t,
+                                                                   kUseCausal,
+                                                                   false, // using softmax
+                                                                   kHasBias,
+                                                                   kHasDropout,
+                                                                   MaxK>(param, stream);
         });
     });
 };

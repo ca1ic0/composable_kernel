@@ -22,6 +22,7 @@ template <typename InOutDataType_,
           bool kHasBias_,
           bool kHasDropout_,
           bool kHasCausal_,
+          bool kUseSoftmax_,
           typename AttentionTileSetting_,
           typename Traits_>
 struct HstuAttentionFwdPipelineProblem
@@ -44,6 +45,7 @@ struct HstuAttentionFwdPipelineProblem
     static constexpr bool kHasBias    = kHasBias_;
     static constexpr bool kHasDropout = kHasDropout_;
     static constexpr bool kHasCausal  = kHasCausal_;
+    static constexpr bool kUseSoftmax = kUseSoftmax_;
 
     static_assert(!kUseGroup || (kUseGroup && kIsJagged),
                   "Group HSTU is only used with jagged mode!");
