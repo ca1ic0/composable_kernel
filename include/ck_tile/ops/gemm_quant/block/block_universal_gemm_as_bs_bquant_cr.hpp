@@ -354,7 +354,6 @@ struct BQuantBlockUniversalGemmAsBsCr : public BlockGemmBQuantBase<Problem_>
                         // 10, 11, 16, 17, 18, 19, 24, 25, 26, 27 respectively.
                         //
                         // These scales can be obtained using __builtin_amdgcn_ds_bpermute.
-
                         constexpr index_t reg_offset = nIter * Traits::BQPerBlock + kQScale;
 
                         constexpr auto tbuf_offset =
