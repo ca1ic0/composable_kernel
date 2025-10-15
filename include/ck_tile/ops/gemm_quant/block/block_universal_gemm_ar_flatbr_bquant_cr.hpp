@@ -184,11 +184,18 @@ struct BlockGemmWeightPreshuffleBQuantARegBRegCReg
 
                     constexpr index_t reg_offset = nIter * KPerBlockBQ + kQScale;
 
-                    auto& scale_reg   = bq_block_tensor.get_thread_buffer()[reg_offset];
-                    float scale_reg_f = cvt_scale_to_fp32(scale_reg);
-
-                    //printf("scale_reg_f: %f, reg_offset: %d, get_block_id(): %d, get_warp_id(): %d, get_thread_id(): %d\n", scale_reg_f, reg_offset, get_block_id(), get_warp_id(), get_thread_id());       
+                    // auto& scale_reg   = bq_block_tensor.get_thread_buffer()[reg_offset];
+                    // float scale_reg_f = cvt_scale_to_fp32(scale_reg);
+                    // if(get_block_id() == 0 && get_warp_id() == 0 && get_thread_id() == 1){
+                    //     printf("scale_reg_f: %f, reg_offset: %d \n", scale_reg_f, reg_offset);
+                    // }       
                     static_for<0, WG::kM * WG::kN / warp_size, 1>{}([&](auto c_row) {
+                        auto& scale_reg   = bq_block_tensor.get_thread_buffer()[reg_offset + c_row];
+                        float scale_reg_f = cvt_scale_to_fp32(scale_reg);
+                        if(get_block_id() == 0 && get_warp_id() == 0 && get_thread_id() == 0){
+                            printf("scale_reg_f: %f, reg_offset: %d \n", scale_reg_f, reg_offset);
+                            printf("c_acc: %f \n", c_acc(mIter)(nIter).get_thread_buffer()[c_row]);
+                        }
                         auto& c_ref = c_block_tensor.get_thread_buffer()[tbuf_offset + c_row];
                         const auto acc_val = c_acc(mIter)(nIter).get_thread_buffer()[c_row];
                         c_ref              = c_ref + acc_val * scale_reg_f;

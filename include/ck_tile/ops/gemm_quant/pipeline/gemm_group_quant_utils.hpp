@@ -105,9 +105,9 @@ struct tile_distribution_encoding_pattern_aq : public tile_distribution_encoding
             return make_static_tile_distribution(
                 tile_distribution_encoding<sequence<NWarps>,  
                                            tuple<sequence<Y0, Y1, Y2, Y3>, sequence<X>>, 
-                                           tuple<sequence<1, 0>, sequence<1, 1>>,
+                                           tuple<sequence<1, 0>, sequence<1, 1>>,  //(mwarp, nwarp), (1, kM)
                                            tuple<sequence<2, 0>, sequence<0, 3>>,
-                                           sequence<1, 2>,
+                                           sequence<1, 2>,   //MIterPerWarp, XPerTile
                                            sequence<1, 0>>{});
         }
     }
@@ -158,9 +158,9 @@ struct tile_distribution_encoding_pattern_aq_transposed_c
         return make_static_tile_distribution(
             tile_distribution_encoding<sequence<NWarps, XR>,
                                        tuple<sequence<Y0, Y1, Y2>, sequence<X>>,
-                                       tuple<sequence<1, 0>, sequence<0, 1>>,
+                                       tuple<sequence<1, 0>, sequence<0, 1>>, //(MWarp, NWarp), (XR(2), kM)
                                        tuple<sequence<1, 0>, sequence<1, 2>>,
-                                       sequence<1, 2>,
+                                       sequence<1, 2>, //MIterPerWarp, XPerTile
                                        sequence<0, 0>>{});
     }
 };
@@ -210,9 +210,9 @@ struct tile_distribution_encoding_pattern_bq : public tile_distribution_encoding
         return make_static_tile_distribution(
             tile_distribution_encoding<sequence<MWarps, XR>,
                                        tuple<sequence<Y0, Y1, Y2>, sequence<X>>,
-                                       tuple<sequence<0, 1>, sequence<0, 1>>,
+                                       tuple<sequence<0, 1>, sequence<0, 1>>, //(MWarp, NWarp), (XR(2), kN)
                                        tuple<sequence<0, 1>, sequence<1, 2>>,  
-                                       sequence<1, 2>,      
+                                       sequence<1, 2>,      //NIterPerWarp, XPerTile
                                        sequence<0, 0>>{});
     }
 };
@@ -246,7 +246,7 @@ struct tile_distribution_encoding_pattern_bq_transposeC : public tile_distributi
     static constexpr index_t Y0 = 1;//NIterPerWarp;
 
     // # of warps in Y dim
-    static constexpr index_t Y1 = NIterPerWarp ? NIterPerWarp : 1; //NIterPerWarp; //NWarps;
+    static constexpr index_t Y1 = NIterPerWarp; //NWarps;
 
     static constexpr index_t Y2 = NWarps; //WarpGemm::kN;
     static constexpr index_t Y3 = WarpGemm::kN;
@@ -256,12 +256,12 @@ struct tile_distribution_encoding_pattern_bq_transposeC : public tile_distributi
     CK_TILE_HOST_DEVICE static constexpr auto make_2d_static_tile_distribution()
     {
         return make_static_tile_distribution(
-            tile_distribution_encoding<sequence<MWarps, XR>,
+            tile_distribution_encoding<sequence<MWarps>,
                                        tuple<sequence<Y0, Y1, Y2, Y3>, sequence<X>>,
-                                       tuple<sequence<0, 1>, sequence<1, 0>>,
-                                       tuple<sequence<0, 2>, sequence<3, 1>>,
-                                       sequence<2, 1>,
-                                       sequence<0, 1>>{});
+                                       tuple<sequence<0, 1>, sequence<1, 1>>, //(MWarp, NWarp), (XR(2), kN)
+                                       tuple<sequence<0, 2>, sequence<0, 3>>,
+                                       sequence<1, 2>,  //NIterPerWarp, XPerTile(2)
+                                       sequence<1, 0>>{});
     }
 };
 
