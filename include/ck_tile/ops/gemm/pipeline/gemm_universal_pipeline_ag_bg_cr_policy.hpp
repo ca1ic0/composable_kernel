@@ -287,8 +287,14 @@ struct UniversalGemmBasePolicy
         else
         {
             // Only use this RowMajor layout for Wave64 mode (gfx9)
+            // AND when A is not using the complex ColumnMajor layout to avoid conflicts
             constexpr auto Wave64 = get_warp_size() == 64;
-            if constexpr(Wave64 && std::is_same_v<BLayout, ck_tile::tensor_layout::gemm::RowMajor>)
+            using ALayout = remove_cvref_t<typename Problem::ALayout>;
+            constexpr bool AIsComplexColMajor = Wave64 && 
+                std::is_same_v<ALayout, ck_tile::tensor_layout::gemm::ColumnMajor>;
+            
+            if constexpr(Wave64 && std::is_same_v<BLayout, ck_tile::tensor_layout::gemm::RowMajor> &&
+                         !AIsComplexColMajor)
             {
                 constexpr index_t BlockSize   = Problem::kBlockSize;
                 constexpr index_t VecLoadSize = GetVectorSizeB<Problem>();
