@@ -19,20 +19,22 @@ void hstu_attention_no_group_forward_fp16(HstuAttentionNoGroupFwdParams& param, 
     const bool use_causal  = param.use_causal;
     BOOL_SWITCH_3(has_bias, kHasBias, has_dropout, kHasDropout, use_causal, kUseCausal, [&] {
         HDIM_SWITCH(param.hdim_qk, param.hdim_v, MaxK, [&] {
-            if(param.is_jagged)
-                run_jagged_forward_causal_softmax_bias_dropout_dispatch<ck_tile::fp16_t,
-                                                                        kUseCausal,
-                                                                        false, // using softmax
-                                                                        kHasBias,
-                                                                        kHasDropout,
-                                                                        MaxK>(param, stream);
-            else
-                run_batched_forward_causal_softmax_bias_dropout_dispatch<ck_tile::fp16_t,
-                                                                         kUseCausal,
-                                                                         false, // using softmax
-                                                                         kHasBias,
-                                                                         kHasDropout,
-                                                                         MaxK>(param, stream);
+            BOOL_SWITCH(param.use_softmax, kUseSoftmax, [&] {
+                if(param.is_jagged)
+                    run_jagged_forward_causal_softmax_bias_dropout_dispatch<ck_tile::fp16_t,
+                                                                            kUseCausal,
+                                                                            kUseSoftmax,
+                                                                            kHasBias,
+                                                                            kHasDropout,
+                                                                            MaxK>(param, stream);
+                else
+                    run_batched_forward_causal_softmax_bias_dropout_dispatch<ck_tile::fp16_t,
+                                                                             kUseCausal,
+                                                                             kUseSoftmax,
+                                                                             kHasBias,
+                                                                             kHasDropout,
+                                                                             MaxK>(param, stream);
+            });
         });
     });
 };

@@ -307,7 +307,7 @@ struct HstuAttentionFwdKernel
              seq_stride_v,
              seq_stride_o,
              num_head,
-             -scale_s,
+             scale_s,
              attn_scale ? attn_scale : 1.0f / static_cast<float>(seqlen), // max_seqlen
              contextual_seqlen,
              window_size,
@@ -382,7 +382,7 @@ struct HstuAttentionFwdKernel
              hdim_v,
              -1, // seqlen will be updated by another pointer
              num_head,
-             -scale_s,
+             scale_s,
              attn_scale ? attn_scale : 1.0f / static_cast<float>(max_seqlen),
              contextual_seqlen,
              window_size,
@@ -458,7 +458,7 @@ struct HstuAttentionFwdKernel
              hdim_v,
              -1, // seqlen will be updated by another pointer
              num_head,
-             -scale_s,
+             scale_s,
              1.0f, // to be set according to the per-group attn_scale and max_seqlen
              0,    // to be set by the per-group contextual_seqlen
              0,    // to be set by the per-group window_size

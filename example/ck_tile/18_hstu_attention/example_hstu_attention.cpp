@@ -111,6 +111,7 @@ auto create_args(int argc, char* argv[])
         .insert("g_max_seqlens", "0", "max uih_seqlen, can be ignored, or else must be equal or bigger than the maximum of all uih seqlens")
         .insert("targets", "", "sequence length at the end of query/key token sequence that should be excluded from attention") 
         .insert("max_target", "0", "max target, can be ignored, or else must be equal of bigger than the maximum of all targets")
+        .insert("softmax", "0", "use softmax or not")
         .insert("causal", "1", "enable causal mask or not")
         .insert("local_len", "5", "length of the diagonal window for enabling masking, value 0 to disable") 
         .insert("g_local_lens", "5,", "list of all group's length of the diagonal window for enabling masking, value 0 to disable") 
@@ -233,6 +234,7 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
     int num_head       = arg_parser.get_int("nhead");
     int hdim_qk        = arg_parser.get_int("hdim_qk");
     int hdim_v         = arg_parser.get_int("hdim_v");
+    bool use_softmax   = static_cast<bool>(arg_parser.get_int("softmax"));
     bool use_causal    = static_cast<bool>(arg_parser.get_int("causal"));
 
     float alpha          = arg_parser.get_float("alpha");
@@ -437,6 +439,7 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
         params.nhead_stride_bias = 0;
         params.nhead_stride_o    = o_host_ref.get_strides()[2];
         params.num_targets_ptr = num_targets.empty() ? nullptr : num_targets_dev.GetDeviceBuffer();
+        params.use_softmax     = use_softmax;
         params.use_causal      = use_causal;
         params.window_size     = window_size;
         params.contextual_seqlen    = contextual_seqlen;
@@ -476,6 +479,7 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
         params.batch_stride_bias = 0;
         params.batch_stride_o    = o_host_ref.get_strides()[0];
         params.num_targets_ptr = num_targets.empty() ? nullptr : num_targets_dev.GetDeviceBuffer();
+        params.use_softmax     = use_softmax;
         params.use_causal      = use_causal;
         params.window_size     = window_size;
         params.contextual_seqlen    = contextual_seqlen;
@@ -507,11 +511,12 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
         using GemmAccDataType = typename HstuAttentionFwdTypeConfig<InOutDataType>::GemmAccDataType;
         using CompDataType    = typename HstuAttentionFwdTypeConfig<InOutDataType>::CompDataType;
 
-        BOOL_SWITCH_2(is_jagged, kIsJagged, use_causal, kUseCausal, [&] {
+        BOOL_SWITCH_3(is_jagged, kIsJagged, use_softmax, kUseSoftmax, use_causal, kUseCausal, [&] {
             ck_tile::reference_no_group_hstu_attention<InOutDataType,
                                                        GemmAccDataType,
                                                        CompDataType,
                                                        kIsJagged,
+                                                       kUseSoftmax,
                                                        kUseCausal>::Run(q_host,
                                                                         k_host,
                                                                         v_host,
@@ -593,6 +598,7 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
     int num_head         = arg_parser.get_int("nhead");
     int hdim_qk          = arg_parser.get_int("hdim_qk");
     int hdim_v           = arg_parser.get_int("hdim_v");
+    bool use_softmax     = static_cast<bool>(arg_parser.get_int("softmax"));
     bool use_causal      = static_cast<bool>(arg_parser.get_int("causal"));
     float alpha          = arg_parser.get_float("alpha");
     int seed             = arg_parser.get_int("seed");
@@ -794,6 +800,7 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
     params.nhead_stride_bias    = 0;
     params.nhead_stride_o       = o_host_ref.get_strides()[2];
     params.num_targets_ptr      = num_targets.empty() ? nullptr : num_targets_dev.GetDeviceBuffer();
+    params.use_softmax          = use_softmax;
     params.use_causal           = use_causal;
     params.p_drop               = 0.0f; // dropout is not supported at present
     params.philox_seed          = 0UL;
@@ -826,10 +833,11 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
         using GemmAccDataType = typename HstuAttentionFwdTypeConfig<InOutDataType>::GemmAccDataType;
         using CompDataType    = typename HstuAttentionFwdTypeConfig<InOutDataType>::CompDataType;
 
-        BOOL_SWITCH(use_causal, kUseCausal, [&] {
+        BOOL_SWITCH_2(use_softmax, kUseSoftmax, use_causal, kUseCausal, [&] {
             ck_tile::reference_group_hstu_attention<InOutDataType,
                                                     GemmAccDataType,
                                                     CompDataType,
+                                                    kUseSoftmax,
                                                     kUseCausal>::Run(q_host,
                                                                      k_host,
                                                                      v_host,

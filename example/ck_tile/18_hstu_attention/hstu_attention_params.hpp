@@ -53,6 +53,8 @@ struct HstuAttentionNoGroupFwdParams
     ck_tile::index_t contextual_seqlen;
     ck_tile::index_t min_full_attn_seqlen;
 
+    bool use_softmax;
+
     float p_drop;
     uint64_t philox_seed;
     uint64_t philox_offset;
@@ -105,6 +107,8 @@ struct HstuAttentionGroupFwdParams
     const void* group_window_size_ptr;
     const void* group_contextual_seqlen_ptr;
     const void* group_min_full_attn_seqlen_ptr;
+
+    bool use_softmax;
 
     float p_drop;
     uint64_t philox_seed;
