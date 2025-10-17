@@ -651,18 +651,20 @@ struct HostTensor
      */
     std::ostream& print_first_n(std::ostream& os, std::size_t n = 5) const
     {
-        os << mDesc;
-        os << "[";
+        os << mDesc << "\n";
+        os << n << "\n";
+        os << mData.size() << "\n";
+        os << "\n[";
         for(typename Data::size_type idx = 0; idx < std::min(n, mData.size()); ++idx)
         {
             if(0 < idx)
             {
-                os << ", ";
+                os << "\n ";
             }
             if constexpr(std::is_same_v<T, bf16_t> || std::is_same_v<T, fp16_t> ||
                          std::is_same_v<T, fp8_t> || std::is_same_v<T, bf8_t>)
             {
-                os << type_convert<float>(mData[idx]) << " #### ";
+                os << idx << " " << type_convert<float>(mData[idx]) << " #### ";
             }
             else if constexpr(std::is_same_v<T, ck_tile::pk_int4_t>)
             {
@@ -676,7 +678,7 @@ struct HostTensor
             }
             else
             {
-                os << mData[idx];
+                os << idx << " " << mData[idx];
             }
         }
         if(mData.size() > n)

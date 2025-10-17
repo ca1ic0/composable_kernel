@@ -55,8 +55,8 @@ struct GemmBQuantPipelineAgBgCrDefaultPolicy : public UniversalGemmPipelineAgBgC
                 tile_distribution_encoding_pattern_bq_transposeC<BlockGemmShape,
                                                                  WarpGemm,
                                                                  BlockSize,
-                                                                 NPerBlock,
                                                                  KPerBlockBQ,
+                                                                 NPerBlock,
                                                                  VecLoadSize>;
             return TileEncodingPattern::make_2d_static_tile_distribution();
         }
@@ -65,8 +65,8 @@ struct GemmBQuantPipelineAgBgCrDefaultPolicy : public UniversalGemmPipelineAgBgC
             using TileEncodingPattern = tile_distribution_encoding_pattern_bq<BlockGemmShape,
                                                                               WarpGemm,
                                                                               BlockSize,
-                                                                              KPerBlockBQ,
-                                                                              NPerBlock,
+                                                                              KPerBlockBQ, //2
+                                                                              NPerBlock, //64
                                                                               VecLoadSize>;
 
             return TileEncodingPattern::make_2d_static_tile_distribution();

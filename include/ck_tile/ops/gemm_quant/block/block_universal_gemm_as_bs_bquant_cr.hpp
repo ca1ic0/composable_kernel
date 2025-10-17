@@ -329,7 +329,7 @@ struct BQuantBlockUniversalGemmAsBsCr : public BlockGemmBQuantBase<Problem_>
                                 b_warp_tile_.get_y_sliced_thread_data(
                                     merge_sequences(sequence<nIter, kIter>{}, b_warp_y_index_zeros),
                                     merge_sequences(sequence<1, 1>{}, b_warp_y_lengths));
-
+                            
                             if constexpr(kIterInQScale == 0)
                             {
                                 c_warp_tensor = WarpGemm{}(a_warp_tensor, b_warp_tensor);
@@ -355,7 +355,7 @@ struct BQuantBlockUniversalGemmAsBsCr : public BlockGemmBQuantBase<Problem_>
                         // 10, 11, 16, 17, 18, 19, 24, 25, 26, 27 respectively.
                         //
                         // These scales can be obtained using __builtin_amdgcn_ds_bpermute.
-                        constexpr index_t reg_offset = nIter * Traits::BQPerBlock + kQScale;
+                        constexpr index_t reg_offset = nIter * Traits::QScalesPerBlockRow + kQScale;
 
                         constexpr auto tbuf_offset =
                             number<typename CBlockTensor::ThreadTensorDesc{}.calculate_offset(
@@ -365,7 +365,6 @@ struct BQuantBlockUniversalGemmAsBsCr : public BlockGemmBQuantBase<Problem_>
 
                         auto& scale_reg   = bq_block_tensor.get_thread_buffer()[reg_offset];
                         float scale_reg_f = Base::cvt_scale_to_fp32(scale_reg);
-
                         static_for<0, WarpGemm::kM * WarpGemm::kN / warp_size, 1>{}(
                             [&](auto c_row) {
                                 c_block_tensor.get_thread_buffer()[tbuf_offset + c_row] +=

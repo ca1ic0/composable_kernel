@@ -338,9 +338,8 @@ int run_gemm_example_with_layouts(int argc,
             {
                 ck_tile::FillUniformDistribution<BDataType>{-2.0f, 3.0f, fill_seed(gen)}(b_k_n);
             }
-            ck_tile::FillUniformDistribution<BQDataType>{-2.0f, 2.0f/*, fill_seed(gen)*/}(
+            ck_tile::FillUniformDistribution<BQDataType>{-2.0f, 2.0f, fill_seed(gen)}(
                 *bq_tensor_ptr);
-            //ck_tile::FillConstant<BQDataType>{static_cast<BQDataType>(2.0f)}(*bq_tensor_ptr);
             ck_tile::FillUniformDistribution<ADataType>{-5.0f, 5.0f, fill_seed(gen)}(a_m_k);
         }
         else if constexpr(QuantMode == ck_tile::QuantType::AQuantGrouped)
@@ -401,7 +400,7 @@ int run_gemm_example_with_layouts(int argc,
         bq_tensor_ptr->SetZero();
     }
     // std::cout << "Tensor B (first 10 elements): ";
-    // bq_tensor_ptr->print_first_n(std::cout, 128);
+    // bq_tensor_ptr->print_first_n(std::cout, 64);
     // std::cout << std::endl;
     
     ck_tile::DeviceMem a_m_k_dev_buf(a_m_k.get_element_space_size_in_bytes());

@@ -171,8 +171,8 @@ struct tile_distribution_encoding_pattern_aq_transposed_c
 template <typename BlockGemmShape,
           typename WarpGemm,
           index_t BlockSize, // 256
-          index_t YPerTile,  // 64
-          index_t XPerTile,  // 2
+          index_t YPerTile,  // 2
+          index_t XPerTile,  // 64
           index_t VecSize>   // 2 or 1
 struct tile_distribution_encoding_pattern_bq : public tile_distribution_encoding_pattern
 {
@@ -181,9 +181,9 @@ struct tile_distribution_encoding_pattern_bq : public tile_distribution_encoding
     static constexpr index_t warp_size = get_warp_size();
     static constexpr index_t num_warps = BlockSize / get_warp_size();
 
-    static constexpr index_t MWarps = BlockGemmShape::BlockWarps::at(number<0>{});
-    static constexpr index_t NWarps = BlockGemmShape::BlockWarps::at(number<1>{});
-    static constexpr index_t KWarps = BlockGemmShape::BlockWarps::at(number<2>{});
+    static constexpr index_t MWarps = BlockGemmShape::BlockWarps::at(number<0>{});//1
+    static constexpr index_t NWarps = BlockGemmShape::BlockWarps::at(number<1>{});//4
+    static constexpr index_t KWarps = BlockGemmShape::BlockWarps::at(number<2>{});//1
 
     static constexpr index_t NIterPerWarp = BlockGemmShape::kN / (NWarps * WarpGemm::kN);
 
@@ -194,16 +194,16 @@ struct tile_distribution_encoding_pattern_bq : public tile_distribution_encoding
 
     // # of elements per thread
     static constexpr index_t Y  = YPerTile;
-    static constexpr index_t YR = 2;
+    static constexpr index_t YR = 1;
 
     // Number of iters per warp
     // MIters are indexed using (Y0, Y1)
-    static constexpr index_t X0 = NIterPerWarp;
+    static constexpr index_t X0 = NIterPerWarp;  //Iter to process complete block tile
 
     // # of warps in Y dim
-    static constexpr index_t X1 = NWarps;
+    static constexpr index_t X1 = NWarps;  //no of warps
 
-    static constexpr index_t X2 = WarpGemm::kN;
+    static constexpr index_t X2 = WarpGemm::kN;  //No of threads
 
     static_assert(X0 * X1 * X2 == XPerTile, "X0, X1, X2 must cover the blocktile along X.");
 
@@ -212,18 +212,18 @@ struct tile_distribution_encoding_pattern_bq : public tile_distribution_encoding
         return make_static_tile_distribution(
             tile_distribution_encoding<sequence<MWarps, YR>,
                                        tuple<sequence<Y>, sequence<X0, X1, X2>>,
-                                       tuple<sequence<0, 2>, sequence<0, 2>>, //(MWarp, NWarp),
+                                       tuple<sequence<0, 2>, sequence<0, 2>>, //(MWarp, NWarp)
                                                                               //(YR(2), kN)
                                        tuple<sequence<0, 1>, sequence<1, 2>>,
                                        sequence<2, 1>, // NIterPerWarp, YPerTile
-                                       sequence<0, 0>>{});
+                                       sequence<0, 0>>{});                                     
     }
 };
 template <typename BlockGemmShape,
           typename WarpGemm,
           index_t BlockSize, // 256
-          index_t YPerTile,  // 64
-          index_t XPerTile,  // 2
+          index_t YPerTile,  // 2
+          index_t XPerTile,  // 64
           index_t VecSize>   // 2 or 1
 struct tile_distribution_encoding_pattern_bq_transposeC : public tile_distribution_encoding_pattern
 {
