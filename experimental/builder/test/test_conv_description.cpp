@@ -92,6 +92,6 @@ TEST(ConvDescriptionTest, BackwardDataInstanceHasDetailedDescription)
                     "   │  ├─ A-Transfer: 4×16×1 thread clusters (coalesced reads)\n"
                     "   │  ├─ B-Transfer: 4×8×1 thread clusters (broadcast-friendly)\n"
                     "   │  └─ C-Transfer: 1×16×1×4 clusters (efficient writeback)\n"
-                    "   └─ Pipeline: V4"));
+                    "   └─ Pipeline: V1"));
 }
 } // namespace

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
+
 #pragma once
 
 #include <string_view>
@@ -168,11 +171,25 @@ struct Description
     }
 };
 
-// Factory function to create Description from a Builder type.
-template <typename Builder>
+// Helper concept to detect if a type has InstanceTraits specialization
+template <typename T>
+concept HasInstanceTraits = requires {
+    typename InstanceTraits<T>;
+};
+
+// Helper concept to detect ConvBuilder types
+template <typename T>
+concept IsConvBuilder = requires {
+    typename T::Factory;
+    typename T::Instance;
+};
+
+// Primary factory function: Create Description from Instance type directly
+template <typename Instance>
+    requires HasInstanceTraits<Instance>
 Description Describe()
 {
-    using Traits = ConvTraits<Builder>;
+    using Traits = ConvTraits<Instance>;
 
     return Description{
         .signature = SignatureInfo{.spatial_dim = Traits::spatial_dim,
@@ -209,6 +226,16 @@ Description Describe()
                     .n_block        = Traits::c_block_transfer.thread_cluster_dims[2],
                     .n_wave_per_xdl = Traits::c_block_transfer.thread_cluster_dims[3]},
             .pipeline = Traits::pipeline_version}};
+}
+
+// Backward compatibility: Create Description from Builder type
+template <typename Builder>
+    requires IsConvBuilder<Builder> && (!HasInstanceTraits<Builder>)
+Description Describe()
+{
+    // Delegate to Instance-based version
+    using Instance = typename Builder::Instance;
+    return Describe<Instance>();
 }
 
 } // namespace ck_tile::reflect
