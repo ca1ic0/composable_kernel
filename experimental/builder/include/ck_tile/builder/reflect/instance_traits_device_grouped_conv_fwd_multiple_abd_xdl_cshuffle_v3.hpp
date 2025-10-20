@@ -6,6 +6,7 @@
 #pragma once
 
 #include "instance_traits.hpp"
+#include "ck/tensor_operation/gpu/device/impl/device_grouped_conv_fwd_multiple_abd_xdl_cshuffle_v3.hpp"
 
 namespace ck_tile::reflect {
 

@@ -27,64 +27,6 @@
 #include <ck/tensor_operation/gpu/device/gemm_specialization.hpp>
 #include "instance_traits_util.hpp"
 
-// Forward declaration to avoid circular dependency.
-// This file will be included by the device implementation header, so we cannot include
-// the implementation header here. We only need the template signature to pattern-match
-// on template parameters - we don't need any implementation details.
-namespace ck::tensor_operation::device {
-
-template <ck::index_t NDimSpatial,
-          typename ALayout,
-          typename BLayout,
-          typename DsLayout,
-          typename ELayout,
-          typename ADataType,
-          typename BDataType,
-          typename AccDataType,
-          typename CShuffleDataType,
-          typename DsDataType,
-          typename EDataType,
-          typename AElementwiseOperation,
-          typename BElementwiseOperation,
-          typename CDEElementwiseOperation,
-          ConvolutionForwardSpecialization ConvForwardSpecialization,
-          GemmSpecialization GemmSpec,
-          ck::index_t BlockSize,
-          ck::index_t MPerBlock,
-          ck::index_t NPerBlock,
-          ck::index_t KPerBlock,
-          ck::index_t AK1,
-          ck::index_t BK1,
-          ck::index_t MPerXDL,
-          ck::index_t NPerXDL,
-          ck::index_t MXdlPerWave,
-          ck::index_t NXdlPerWave,
-          typename ABlockTransferThreadClusterLengths_AK0_M_AK1,
-          typename ABlockTransferThreadClusterArrangeOrder,
-          typename ABlockTransferSrcAccessOrder,
-          ck::index_t ABlockTransferSrcVectorDim,
-          ck::index_t ABlockTransferSrcScalarPerVector,
-          ck::index_t ABlockTransferDstScalarPerVector_AK1,
-          ck::index_t ABlockLdsExtraM,
-          typename BBlockTransferThreadClusterLengths_BK0_N_BK1,
-          typename BBlockTransferThreadClusterArrangeOrder,
-          typename BBlockTransferSrcAccessOrder,
-          ck::index_t BBlockTransferSrcVectorDim,
-          ck::index_t BBlockTransferSrcScalarPerVector,
-          ck::index_t BBlockTransferDstScalarPerVector_BK1,
-          ck::index_t BBlockLdsExtraN,
-          ck::index_t CShuffleMXdlPerWavePerShuffle,
-          ck::index_t CShuffleNXdlPerWavePerShuffle,
-          typename CDEBlockTransferClusterLengths_MBlock_MPerBlock_NBlock_NPerBlock,
-          ck::index_t CDEBlockTransferScalarPerVector_NPerBlock,
-          ck::BlockGemmPipelineScheduler BlkGemmPipeSched,
-          ck::BlockGemmPipelineVersion BlkGemmPipelineVer,
-          typename AComputeDataType,
-          typename BComputeDataType>
-struct DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3;
-
-} // namespace ck::tensor_operation::device
-
 namespace ck_tile::reflect {
 
 // Primary template for InstanceTraits - extracts compile-time information directly from
@@ -94,7 +36,11 @@ namespace ck_tile::reflect {
 // device kernels are provided in separate header files (e.g.,
 // instance_traits_device_grouped_conv_fwd_multiple_abd_xdl_cshuffle_v3.hpp).
 template <typename Instance>
-struct InstanceTraits;
+struct InstanceTraits {
+    std::string instance_string() {
+        throw "instance_string not implemented!";
+    }
+}
 
 // Free function that delegates to InstanceTraits static member function.
 // Each InstanceTraits specialization provides its own instance_string() implementation.
