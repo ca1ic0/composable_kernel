@@ -336,11 +336,11 @@ int run_gemm_example_with_layouts(int argc,
             }
             else
             {
-                ck_tile::FillUniformDistribution<BDataType>{-2.0f, 3.0f, fill_seed(gen)}(b_k_n);
+                ck_tile::FillUniformDistribution<BDataType>{-2.0f, 3.0f/*, fill_seed(gen)*/}(b_k_n);
             }
-            ck_tile::FillUniformDistribution<BQDataType>{-2.0f, 2.0f, fill_seed(gen)}(
+            ck_tile::FillUniformDistribution<BQDataType>{-2.0f, 2.0f/*, fill_seed(gen)*/}(
                 *bq_tensor_ptr);
-            ck_tile::FillUniformDistribution<ADataType>{-5.0f, 5.0f, fill_seed(gen)}(a_m_k);
+            ck_tile::FillUniformDistribution<ADataType>{-5.0f, 5.0f/*, fill_seed(gen)*/}(a_m_k);
         }
         else if constexpr(QuantMode == ck_tile::QuantType::AQuantGrouped)
         {

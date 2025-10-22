@@ -244,29 +244,30 @@ struct tile_distribution_encoding_pattern_bq_transposeC : public tile_distributi
     static_assert(KWarps == 1);
 
     // # of elements per thread
-    static constexpr index_t X  = XPerTile;
-    static constexpr index_t XR = 2;
-    static constexpr index_t Y0 = 1; // NIterPerWarp;
+    static constexpr index_t Y  = YPerTile;
+    static constexpr index_t YR = 1;
 
     // # of warps in Y dim
-    static constexpr index_t Y1 = NIterPerWarp; // NWarps;
+    
+    static constexpr index_t X0 = NIterPerWarp; // NWarps;
+    static constexpr index_t X1 = NWarps; // WarpGemm::kN;
 
-    static constexpr index_t Y2 = NWarps; // WarpGemm::kN;
-    static constexpr index_t Y3 = WarpGemm::kN;
+    static constexpr index_t X2 = WarpGemm::kN;
+    static constexpr index_t X3 = 4;
 
-    static_assert(Y0 * Y1 * Y2 * Y3 == YPerTile,
-                  "Y0, Y1, Y2, Y3 must cover the blocktile along Y.");
+    static_assert(X0 * X1 * X2 == XPerTile,
+                  "X0, X1, X2 must cover the blocktile along X.");
 
     CK_TILE_HOST_DEVICE static constexpr auto make_2d_static_tile_distribution()
     {
         return make_static_tile_distribution(
-            tile_distribution_encoding<sequence<MWarps>,
-                                       tuple<sequence<Y0, Y1, Y2, Y3>, sequence<X>>,
-                                       tuple<sequence<0, 1>, sequence<1, 1>>, //(MWarp, NWarp),
-                                                                              //(XR(2), kN)
-                                       tuple<sequence<0, 2>, sequence<0, 3>>,
-                                       sequence<1, 2>, // NIterPerWarp, XPerTile(2)
-                                       sequence<1, 0>>{});
+            tile_distribution_encoding<sequence<MWarps, YR>,
+                                       tuple<sequence<Y>, sequence<X0, X1, X2, X3>>,
+                                       tuple<sequence<0, 2>, sequence<0, 2>>, //(MWarp, NWarp),(1, 4)
+                                                                              //(XR(2), kN) (2, 16)
+                                       tuple<sequence<0, 1>, sequence<1, 2>>,
+                                       sequence<2, 2>, // NIterPerWarp, XPerTile(2) (1, 2)
+                                       sequence<0, 3>>{});
     }
 };
 
