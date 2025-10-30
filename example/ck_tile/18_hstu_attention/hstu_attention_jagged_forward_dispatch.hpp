@@ -15,7 +15,8 @@
 #include "hstu_attention_hdim_switch.hpp"
 #include "hstu_attention_pipeline_problem.hpp"
 #include "hstu_attention_traits.hpp"
-#include "hstu_attention_fwd_pipeline.hpp"
+#include "hstu_attention_with_softmax_fwd_pipeline.hpp"
+#include "hstu_attention_no_softmax_fwd_pipeline.hpp"
 #include "hstu_attention_fwd_kernel.hpp"
 #include "hstu_attention_epilogue.hpp"
 
@@ -75,8 +76,12 @@ struct jagged_forward_causal_softmax_bias_dropout_dispatch
                 kPadSeqLenQ,
                 kPadHeadDimV>>;
 
-            using HstuPipeline = ck_tile::HstuAttentionFwdPipelineQRKSVS<HstuPipelineProblem>;
-            using HstuKernel   = ck_tile::HstuAttentionFwdKernel<HstuPipeline, HstuEpilogue>;
+            using HstuPipeline = std::conditional_t<
+                kUseSoftmax,
+                ck_tile::HstuAttentionWithSoftmaxFwdPipelineQRKSVS<HstuPipelineProblem>,
+                ck_tile::HstuAttentionNoSoftmaxFwdPipelineQRKSVS<HstuPipelineProblem>>;
+
+            using HstuKernel = ck_tile::HstuAttentionFwdKernel<HstuPipeline, HstuEpilogue>;
 
             RunWithKernel<HstuKernel>(param, stream);
         });
