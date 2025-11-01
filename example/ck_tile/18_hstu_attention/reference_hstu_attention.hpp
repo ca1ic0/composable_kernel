@@ -33,29 +33,30 @@ template <typename InOutDataType,
           bool kUseCausal>
 struct reference_no_group_hstu_attention
 {
-    static void
-    Run(const HostTensor<InOutDataType>& q_batch_seq_nhead_hdim,
-        const HostTensor<InOutDataType>& k_batch_seq_nhead_hdim,
-        const HostTensor<InOutDataType>& v_batch_seq_nhead_hdim,
-        HostTensor<InOutDataType>& o_batch_seq_nhead_hdim,
-        HostTensor<int8_t>& mask_batch_nhead_seq_seq,
-        int num_batch,
-        float alpha,
-        float attn_scale,
-        int max_seqlen,
-        const std::vector<int>& seq_offsets,
-        const std::vector<int>& num_targets, // define masking length at the end of token
-                                             // sequence to be excluded for attention
-        int contextual_seqlen,               // define masking length at the begin of query token
-                                             // sequence to be included for attention
-        int window_size,                     // define the diagonal local window size
-        int min_full_attn_seqlen)            // define masking length at the end of query token
-                                             // sequence which is included for full attention
+    static void Run(const HostTensor<InOutDataType>& q_batch_seq_nhead_hdim,
+                    const HostTensor<InOutDataType>& k_batch_seq_nhead_hdim,
+                    const HostTensor<InOutDataType>& v_batch_seq_nhead_hdim,
+                    HostTensor<InOutDataType>& o_batch_seq_nhead_hdim,
+                    HostTensor<int8_t>& mask_batch_nhead_seq_seq,
+                    int num_batch,
+                    float alpha,
+                    float attn_scale,
+                    int max_seqlen,
+                    std::vector<int> seq_q_offsets,
+                    std::vector<int> seq_kv_offsets,
+                    std::vector<int> num_targets, // define masking length at the end of token
+                                                  // sequence to be excluded for attention
+                    int contextual_seqlen,    // define masking length at the begin of query token
+                                              // sequence to be included for attention
+                    int window_size,          // define the diagonal local window size
+                    int min_full_attn_seqlen) // define masking length at the end of query token
+                                              // sequence which is included for full attention
     {
         if constexpr(kIsJagged)
         {
             // check the number of batches
-            assert(!seq_offsets.empty() && seq_offsets.size() == num_batch + 1);
+            assert(!seq_q_offsets.empty() && seq_q_offsets.size() == num_batch + 1);
+            assert(!seq_kv_offsets.empty() && seq_kv_offsets.size() == num_batch + 1);
             assert(q_batch_seq_nhead_hdim.get_lengths()[0] == 1);
             assert(k_batch_seq_nhead_hdim.get_lengths()[0] == 1);
             assert(v_batch_seq_nhead_hdim.get_lengths()[0] == 1);
@@ -63,7 +64,8 @@ struct reference_no_group_hstu_attention
         }
         else
         {
-            assert(seq_offsets.empty());
+            assert(seq_q_offsets.empty());
+            assert(seq_kv_offsets.empty());
             assert(q_batch_seq_nhead_hdim.get_lengths()[0] == num_batch);
             assert(k_batch_seq_nhead_hdim.get_lengths()[0] == num_batch);
             assert(v_batch_seq_nhead_hdim.get_lengths()[0] == num_batch);
@@ -105,8 +107,10 @@ struct reference_no_group_hstu_attention
         };
 
         auto f = [&](auto i_batch, auto i_head) {
-            int seqlen = kIsJagged ? (seq_offsets[i_batch + 1] - seq_offsets[i_batch])
-                                   : q_batch_seq_nhead_hdim.get_lengths()[1];
+            int seqlen_q  = kIsJagged ? (seq_q_offsets[i_batch + 1] - seq_q_offsets[i_batch])
+                                      : q_batch_seq_nhead_hdim.get_lengths()[1];
+            int seqlen_kv = kIsJagged ? (seq_kv_offsets[i_batch + 1] - seq_kv_offsets[i_batch])
+                                      : k_batch_seq_nhead_hdim.get_lengths()[1];
 
             int num_target = num_targets.empty() ? 0 : num_targets[i_batch];
 
@@ -119,10 +123,11 @@ struct reference_no_group_hstu_attention
                     if constexpr(kHasLocal)
                         // need adjust the min_full_attn_seqlen passed to the HstuBlockMask() if the
                         // user passed min_full_attn_seqlen is bigger than max_uih_len
-                        if(seqlen - num_target > min_full_attn_seqlen)
+                        if(seqlen_q - num_target > min_full_attn_seqlen)
                             return ck_tile::make_hstu_block_mask_with_local<HstuMask>(
                                 true,
-                                seqlen,
+                                seqlen_q,
+                                seqlen_kv,
                                 contextual_seqlen,
                                 num_target,
                                 window_size,
@@ -130,14 +135,15 @@ struct reference_no_group_hstu_attention
                         else
                             return ck_tile::make_hstu_block_mask_with_local<HstuMask>(
                                 true,
-                                seqlen,
+                                seqlen_q,
+                                seqlen_kv,
                                 contextual_seqlen,
                                 num_target,
                                 window_size,
-                                seqlen - num_target);
+                                seqlen_q - num_target);
                     else
                         return ck_tile::make_hstu_block_mask_without_local<HstuMask>(
-                            seqlen, contextual_seqlen, num_target);
+                            seqlen_q, seqlen_kv, contextual_seqlen, num_target);
                 }();
 
                 if(save_mask)
@@ -150,7 +156,7 @@ struct reference_no_group_hstu_attention
                 }
 
                 // for all rows in the batch
-                for(int sq = 0; sq < seqlen; sq++)
+                for(int sq = 0; sq < seqlen_q; sq++)
                 {
                     CompDataType m =
                         -ck_tile::numeric<CompDataType>::infinity(); // max value of the row
@@ -160,7 +166,7 @@ struct reference_no_group_hstu_attention
                     std::vector<CompDataType> locals;
 
                     // for all cols in the batch
-                    for(int sk = 0; sk < seqlen; sk++)
+                    for(int sk = 0; sk < seqlen_kv; sk++)
                     {
                         if(mask.IsTokenPairInsideMask(sq, sk))
                         {
@@ -170,9 +176,9 @@ struct reference_no_group_hstu_attention
                                 if constexpr(kIsJagged)
                                 {
                                     InOutDataType qreg = q_batch_seq_nhead_hdim(
-                                        0, seq_offsets[i_batch] + sq, i_head, k);
+                                        0, seq_q_offsets[i_batch] + sq, i_head, k);
                                     InOutDataType kreg = k_batch_seq_nhead_hdim(
-                                        0, seq_offsets[i_batch] + sk, i_head, k);
+                                        0, seq_kv_offsets[i_batch] + sk, i_head, k);
 
                                     dot_prod += ck_tile::type_convert<GemmAccDataType>(qreg) *
                                                 ck_tile::type_convert<GemmAccDataType>(kreg);
@@ -234,14 +240,14 @@ struct reference_no_group_hstu_attention
                     {
                         GemmAccDataType dot_prod = 0.f;
 
-                        for(int sk = 0; sk < seqlen; sk++)
+                        for(int sk = 0; sk < seqlen_kv; sk++)
                         {
                             if constexpr(kIsJagged)
                             {
                                 InOutDataType preg =
                                     ck_tile::type_convert<InOutDataType>(locals[sk]);
-                                InOutDataType vreg =
-                                    v_batch_seq_nhead_hdim(0, seq_offsets[i_batch] + sk, i_head, k);
+                                InOutDataType vreg = v_batch_seq_nhead_hdim(
+                                    0, seq_kv_offsets[i_batch] + sk, i_head, k);
 
                                 dot_prod += ck_tile::type_convert<GemmAccDataType>(preg) *
                                             ck_tile::type_convert<GemmAccDataType>(vreg);
@@ -258,7 +264,7 @@ struct reference_no_group_hstu_attention
                         };
 
                         if constexpr(kIsJagged)
-                            o_batch_seq_nhead_hdim(0, seq_offsets[i_batch] + sq, i_head, k) =
+                            o_batch_seq_nhead_hdim(0, seq_q_offsets[i_batch] + sq, i_head, k) =
                                 ck_tile::type_convert<InOutDataType>(dot_prod);
                         else
                             o_batch_seq_nhead_hdim(i_batch, sq, i_head, k) =
@@ -289,7 +295,8 @@ struct reference_group_hstu_attention
         int num_batch_per_group,
         float alpha,
         int max_max_seqlen, // the maximum of all groups's max_seqlen
-        const std::vector<int>& seq_offsets,
+        const std::vector<int>& seq_q_offsets,
+        const std::vector<int>& seq_kv_offsets,
         const std::vector<int>& num_targets,       // define masking length at the end of token
                                                    // sequence to be excluded for attention
         const std::vector<int>& group_max_seqlens, // max seqlen list by groups
@@ -340,8 +347,9 @@ struct reference_group_hstu_attention
         };
 
         auto f = [&](auto i_batch, auto i_head) {
-            int i_group = i_batch / num_batch_per_group;
-            int seqlen  = seq_offsets[i_batch + 1] - seq_offsets[i_batch];
+            int i_group   = i_batch / num_batch_per_group;
+            int seqlen_q  = seq_q_offsets[i_batch + 1] - seq_q_offsets[i_batch];
+            int seqlen_kv = seq_kv_offsets[i_batch + 1] - seq_kv_offsets[i_batch];
 
             int num_target = num_targets.empty() ? 0 : num_targets[i_batch];
 
@@ -361,10 +369,11 @@ struct reference_group_hstu_attention
                     if constexpr(kHasLocal)
                         // need adjust the min_full_attn_seqlen passed to the HstuBlockMask() if the
                         // user passed min_full_attn_seqlen is bigger than max_uih_len
-                        if(seqlen - num_target > min_full_attn_seqlen)
+                        if(seqlen_q - num_target > min_full_attn_seqlen)
                             return ck_tile::make_hstu_block_mask_with_local<HstuMask>(
                                 true,
-                                seqlen,
+                                seqlen_q,
+                                seqlen_kv,
                                 contextual_seqlen,
                                 num_target,
                                 window_size,
@@ -372,14 +381,15 @@ struct reference_group_hstu_attention
                         else
                             return ck_tile::make_hstu_block_mask_with_local<HstuMask>(
                                 true,
-                                seqlen,
+                                seqlen_q,
+                                seqlen_kv,
                                 contextual_seqlen,
                                 num_target,
                                 window_size,
-                                seqlen - num_target);
+                                seqlen_q - num_target);
                     else
                         return ck_tile::make_hstu_block_mask_without_local<HstuMask>(
-                            seqlen, contextual_seqlen, num_target);
+                            seqlen_q, seqlen_kv, contextual_seqlen, num_target);
                 }();
 
                 if(save_mask)
@@ -392,7 +402,7 @@ struct reference_group_hstu_attention
                 }
 
                 // for all rows in the batch
-                for(int sq = 0; sq < seqlen; sq++)
+                for(int sq = 0; sq < seqlen_q; sq++)
                 {
                     CompDataType m =
                         -ck_tile::numeric<CompDataType>::infinity(); // max value of the row
@@ -402,17 +412,17 @@ struct reference_group_hstu_attention
                     std::vector<CompDataType> locals;
 
                     // for all cols in the batch
-                    for(int sk = 0; sk < seqlen; sk++)
+                    for(int sk = 0; sk < seqlen_kv; sk++)
                     {
                         if(mask.IsTokenPairInsideMask(sq, sk))
                         {
                             GemmAccDataType dot_prod = 0.f;
                             for(int k = 0; k < hdim_qk; k++)
                             {
-                                InOutDataType qreg =
-                                    q_batch_seq_nhead_hdim(0, seq_offsets[i_batch] + sq, i_head, k);
-                                InOutDataType kreg =
-                                    k_batch_seq_nhead_hdim(0, seq_offsets[i_batch] + sk, i_head, k);
+                                InOutDataType qreg = q_batch_seq_nhead_hdim(
+                                    0, seq_q_offsets[i_batch] + sq, i_head, k);
+                                InOutDataType kreg = k_batch_seq_nhead_hdim(
+                                    0, seq_kv_offsets[i_batch] + sk, i_head, k);
 
                                 dot_prod += ck_tile::type_convert<GemmAccDataType>(qreg) *
                                             ck_tile::type_convert<GemmAccDataType>(kreg);
@@ -463,17 +473,17 @@ struct reference_group_hstu_attention
                     {
                         GemmAccDataType dot_prod = 0.f;
 
-                        for(int sk = 0; sk < seqlen; sk++)
+                        for(int sk = 0; sk < seqlen_kv; sk++)
                         {
                             InOutDataType preg = ck_tile::type_convert<InOutDataType>(locals[sk]);
                             InOutDataType vreg =
-                                v_batch_seq_nhead_hdim(0, seq_offsets[i_batch] + sk, i_head, k);
+                                v_batch_seq_nhead_hdim(0, seq_kv_offsets[i_batch] + sk, i_head, k);
 
                             dot_prod += ck_tile::type_convert<GemmAccDataType>(preg) *
                                         ck_tile::type_convert<GemmAccDataType>(vreg);
                         };
 
-                        o_batch_seq_nhead_hdim(0, seq_offsets[i_batch] + sq, i_head, k) =
+                        o_batch_seq_nhead_hdim(0, seq_q_offsets[i_batch] + sq, i_head, k) =
                             ck_tile::type_convert<InOutDataType>(dot_prod);
                     };
                 };

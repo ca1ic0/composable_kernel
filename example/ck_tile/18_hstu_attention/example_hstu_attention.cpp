@@ -106,7 +106,8 @@ auto create_args(int argc, char* argv[])
         .insert("nhead", "4", "number of heads")
         .insert("hdim_qk", "64", "headdim size of Q/K")
         .insert("hdim_v", "64", "headdim size of V/O")
-        .insert("seqlens", "400", "uih seqlen of single or all batches for query and key/value tensor, actually allocated seqlen will include the target of each batch and context_len")
+        .insert("seqlens", "400", "uih seqlen of single or all batches for query tensor, actually allocated seqlen will include the target of each batch and context_len")
+        .insert("seqlens_kv", "", "uih seqlen of single or all batches for key/value tensor, actually allocated seqlen will include the target of each batch and context_len")
         .insert("max_seqlen", "0", "max uih_seqlen, can be ignored, or else must be equal or bigger than the maximum of all uih seqlens")
         .insert("g_max_seqlens", "0", "max uih_seqlen, can be ignored, or else must be equal or bigger than the maximum of all uih seqlens")
         .insert("targets", "", "sequence length at the end of query/key token sequence that should be excluded from attention") 
@@ -252,13 +253,16 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
     str_of_integers              = arg_parser.get_str("targets");
     std::vector<int> num_targets = get_integers_from_string(str_of_integers);
 
-    str_of_integers              = arg_parser.get_str("seqlens");
-    std::vector<int> seq_lengths = get_integers_from_string(str_of_integers);
-
     int window_size = arg_parser.get_int("local_len");
 
     int contextual_seqlen    = arg_parser.get_int("context_len");
     int min_full_attn_seqlen = arg_parser.get_int("minfull_len");
+
+    std::string str_of_lengths_q   = arg_parser.get_str("seqlens");
+    std::vector<int> seq_lengths_q = get_integers_from_string(str_of_lengths_q);
+
+    std::string str_of_lengths_kv   = arg_parser.get_str("seqlens_kv");
+    std::vector<int> seq_lengths_kv = get_integers_from_string(str_of_lengths_kv);
 
     int input_max_uih_seqlen = arg_parser.get_int("max_seqlen");
     int input_max_target     = arg_parser.get_int("max_target");
@@ -266,24 +270,30 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
     int max_uih_seqlen = 0;
     int max_target     = 0;
 
-    HSTU_CHECK(!seq_lengths.empty(), "sequence lengths shoud be defined!");
+    HSTU_CHECK(!seq_lengths_q.empty(), "sequence lengths of q shoud be defined!");
+
+    // assume seq_lengths_kv is same as seq_lengths_q if not defined
+    if(seq_lengths_kv.empty())
+        seq_lengths_kv = seq_lengths_q;
 
     if(is_jagged)
     {
-        // supplement seq_lengths using the last input value if user-provided lengths not enough
-        supplement_array_by_last_element(seq_lengths, num_batch);
+        // supplement seq_lengths_q using the last input value if user-provided lengths not enough
+        supplement_array_by_last_element(seq_lengths_q, num_batch);
 
-        // only consider num_batch values even if more values were provided by the user
+        // supplement seq_lengths_kv using the last input value if user-provided lengths not enough
+        supplement_array_by_last_element(seq_lengths_kv, num_batch);
+
         for(int i = 0; i < num_batch; i++)
         {
-            max_uih_seqlen = max(max_uih_seqlen, seq_lengths[i]);
+            max_uih_seqlen = max(max_uih_seqlen, seq_lengths_q[i]);
         };
     }
     else
     {
-        HSTU_CHECK(1 == seq_lengths.size(),
+        HSTU_CHECK(1 == seq_lengths_q.size() && 1 == seq_lengths_kv.size(),
                    "sequence lengths for batched mode shoud have single element!");
-        max_uih_seqlen = seq_lengths[0];
+        max_uih_seqlen = max(seq_lengths_q[0], seq_lengths_kv[0]);
     };
 
     if(!num_targets.empty())
@@ -307,28 +317,43 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
     max_uih_seqlen = (input_max_uih_seqlen > 0) ? input_max_uih_seqlen : max_uih_seqlen;
     max_target     = (input_max_target > 0) ? input_max_target : max_target;
 
-    int phy_seqlen = 0;
-    int max_seqlen = max_uih_seqlen + max_target + contextual_seqlen;
+    int phy_seqlen_q  = 0;
+    int phy_seqlen_kv = 0;
+    int max_seqlen    = max_uih_seqlen + max_target + contextual_seqlen;
 
-    std::vector<int> seq_offsets;
+    std::vector<int> seq_offsets_q;
+    std::vector<int> seq_offsets_kv;
 
     if(is_jagged)
     {
-        seq_offsets.push_back(0);
+        seq_offsets_q.push_back(0);
 
         for(int i = 0; i < num_batch; i++)
         {
             int batch_seqlen = num_targets.empty()
-                                   ? seq_lengths[i] + contextual_seqlen
-                                   : seq_lengths[i] + num_targets[i] + contextual_seqlen;
+                                   ? seq_lengths_q[i] + contextual_seqlen
+                                   : seq_lengths_q[i] + num_targets[i] + contextual_seqlen;
 
-            phy_seqlen += batch_seqlen;
-            seq_offsets.push_back(phy_seqlen);
+            phy_seqlen_q += batch_seqlen;
+            seq_offsets_q.push_back(phy_seqlen_q);
+        };
+
+        seq_offsets_kv.push_back(0);
+
+        for(int i = 0; i < num_batch; i++)
+        {
+            int batch_seqlen = num_targets.empty()
+                                   ? seq_lengths_kv[i] + contextual_seqlen
+                                   : seq_lengths_kv[i] + num_targets[i] + contextual_seqlen;
+
+            phy_seqlen_kv += batch_seqlen;
+            seq_offsets_kv.push_back(phy_seqlen_kv);
         };
     }
     else
     {
-        phy_seqlen = max_seqlen;
+        phy_seqlen_q  = max_seqlen;
+        phy_seqlen_kv = max_seqlen;
     };
 
     long total_flops = 0;
@@ -338,10 +363,11 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
     {
         for(int i = 0; i < num_batch; i++)
         {
-            int len = seq_offsets[i + 1] - seq_offsets[i];
-            total_flops +=
-                (static_cast<long>(len) * len * hdim_qk + static_cast<long>(len) * hdim_v * len) *
-                2;
+            int len_q  = seq_offsets_q[i + 1] - seq_offsets_q[i];
+            int len_kv = seq_offsets_kv[i + 1] - seq_offsets_kv[i];
+            total_flops += (static_cast<long>(len_q) * len_kv * hdim_qk +
+                            static_cast<long>(len_q) * hdim_v * len_kv) *
+                           2;
         };
 
         total_flops *= num_head;
@@ -349,21 +375,21 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
     else
     {
         total_flops = static_cast<long>(num_batch) * num_head *
-                      (static_cast<long>(phy_seqlen) * phy_seqlen * hdim_qk +
-                       static_cast<long>(phy_seqlen) * hdim_v * phy_seqlen) *
+                      (static_cast<long>(phy_seqlen_q) * phy_seqlen_kv * hdim_qk +
+                       static_cast<long>(phy_seqlen_q) * hdim_v * phy_seqlen_kv) *
                       2;
     };
 
     int batches_for_alloc = is_jagged ? 1 : num_batch;
 
     ck_tile::HostTensor<InOutDataType> q_host(
-        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen, num_head, hdim_qk});
+        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen_q, num_head, hdim_qk});
     ck_tile::HostTensor<InOutDataType> k_host(
-        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen, num_head, hdim_qk});
+        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen_kv, num_head, hdim_qk});
     ck_tile::HostTensor<InOutDataType> v_host(
-        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen, num_head, hdim_v});
+        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen_kv, num_head, hdim_v});
     ck_tile::HostTensor<InOutDataType> o_host_ref(
-        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen, num_head, hdim_v});
+        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen_q, num_head, hdim_v});
 
     ck_tile::HostTensor<int8_t> mask_host(
         save_mask ? std::array<ck_tile::index_t, 4>{num_batch, num_head, max_seqlen, max_seqlen}
@@ -396,7 +422,8 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
     ck_tile::DeviceMem v_dev(v_host.get_element_space_size_in_bytes());
     ck_tile::DeviceMem o_dev(o_host_ref.get_element_space_size_in_bytes());
 
-    ck_tile::DeviceMem seq_offsets_dev(seq_offsets.size() * sizeof(int));
+    ck_tile::DeviceMem seq_offsets_q_dev(seq_offsets_q.size() * sizeof(int));
+    ck_tile::DeviceMem seq_offsets_kv_dev(seq_offsets_kv.size() * sizeof(int));
     ck_tile::DeviceMem num_targets_dev(num_targets.size() * sizeof(int));
 
     q_dev.ToDevice(q_host.data());
@@ -404,7 +431,10 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
     v_dev.ToDevice(v_host.data());
 
     if(is_jagged)
-        seq_offsets_dev.ToDevice(seq_offsets.data());
+    {
+        seq_offsets_q_dev.ToDevice(seq_offsets_q.data());
+        seq_offsets_kv_dev.ToDevice(seq_offsets_kv.data());
+    };
     if(!num_targets.empty())
         num_targets_dev.ToDevice(num_targets.data());
 
@@ -414,30 +444,31 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
 
     if(is_jagged)
     {
-        params.is_jagged         = true;
-        params.num_batch         = num_batch;
-        params.seq_offsets_ptr   = seq_offsets_dev.GetDeviceBuffer();
-        params.max_seqlen        = max_seqlen;
-        params.q_ptr             = q_dev.GetDeviceBuffer();
-        params.k_ptr             = k_dev.GetDeviceBuffer();
-        params.v_ptr             = v_dev.GetDeviceBuffer();
-        params.bias_ptr          = nullptr; // bias is not supported at present
-        params.o_ptr             = o_dev.GetDeviceBuffer();
-        params.hdim_qk           = hdim_qk;
-        params.hdim_v            = hdim_v;
-        params.num_head          = num_head;
-        params.scale_s           = scale_s;
-        params.attn_scale        = attn_scale;
-        params.seq_stride_q      = q_host.get_strides()[1];
-        params.seq_stride_k      = k_host.get_strides()[1];
-        params.seq_stride_v      = v_host.get_strides()[1];
-        params.seq_stride_bias   = 0;
-        params.seq_stride_o      = o_host_ref.get_strides()[1];
-        params.nhead_stride_q    = q_host.get_strides()[2];
-        params.nhead_stride_k    = k_host.get_strides()[2];
-        params.nhead_stride_v    = v_host.get_strides()[2];
-        params.nhead_stride_bias = 0;
-        params.nhead_stride_o    = o_host_ref.get_strides()[2];
+        params.is_jagged          = true;
+        params.num_batch          = num_batch;
+        params.seq_q_offsets_ptr  = seq_offsets_q_dev.GetDeviceBuffer();
+        params.seq_kv_offsets_ptr = seq_offsets_kv_dev.GetDeviceBuffer();
+        params.max_seqlen         = max_seqlen;
+        params.q_ptr              = q_dev.GetDeviceBuffer();
+        params.k_ptr              = k_dev.GetDeviceBuffer();
+        params.v_ptr              = v_dev.GetDeviceBuffer();
+        params.bias_ptr           = nullptr; // bias is not supported at present
+        params.o_ptr              = o_dev.GetDeviceBuffer();
+        params.hdim_qk            = hdim_qk;
+        params.hdim_v             = hdim_v;
+        params.num_head           = num_head;
+        params.scale_s            = scale_s;
+        params.attn_scale         = attn_scale;
+        params.seq_stride_q       = q_host.get_strides()[1];
+        params.seq_stride_k       = k_host.get_strides()[1];
+        params.seq_stride_v       = v_host.get_strides()[1];
+        params.seq_stride_bias    = 0;
+        params.seq_stride_o       = o_host_ref.get_strides()[1];
+        params.nhead_stride_q     = q_host.get_strides()[2];
+        params.nhead_stride_k     = k_host.get_strides()[2];
+        params.nhead_stride_v     = v_host.get_strides()[2];
+        params.nhead_stride_bias  = 0;
+        params.nhead_stride_o     = o_host_ref.get_strides()[2];
         params.num_targets_ptr = num_targets.empty() ? nullptr : num_targets_dev.GetDeviceBuffer();
         params.use_softmax     = use_softmax;
         params.use_causal      = use_causal;
@@ -452,7 +483,8 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
     {
         params.is_jagged         = false;
         params.num_batch         = num_batch;
-        params.seqlen            = max_seqlen;
+        params.seqlen_q          = phy_seqlen_q;
+        params.seqlen_kv         = phy_seqlen_kv;
         params.q_ptr             = q_dev.GetDeviceBuffer();
         params.k_ptr             = k_dev.GetDeviceBuffer();
         params.v_ptr             = v_dev.GetDeviceBuffer();
@@ -526,7 +558,8 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
                                                                         scale_s,
                                                                         attn_scale,
                                                                         max_seqlen,
-                                                                        seq_offsets,
+                                                                        seq_offsets_q,
+                                                                        seq_offsets_kv,
                                                                         num_targets,
                                                                         contextual_seqlen,
                                                                         window_size,
@@ -534,7 +567,7 @@ bool run_no_group_hstu(const ck_tile::ArgParser& arg_parser, bool is_jagged)
         });
 
         ck_tile::HostTensor<InOutDataType> o_host(
-            std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen, num_head, hdim_v});
+            std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen_q, num_head, hdim_v});
 
         o_dev.FromDevice(o_host.data());
 
@@ -614,10 +647,17 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
     str_of_integers              = arg_parser.get_str("targets");
     std::vector<int> num_targets = get_integers_from_string(str_of_integers);
 
-    str_of_integers              = arg_parser.get_str("seqlens");
-    std::vector<int> seq_lengths = get_integers_from_string(str_of_integers);
+    std::string str_of_lengths_q   = arg_parser.get_str("seqlens");
+    std::vector<int> seq_lengths_q = get_integers_from_string(str_of_lengths_q);
 
-    HSTU_CHECK(!seq_lengths.empty(), "sequence lengths shoud be defined!");
+    std::string str_of_lengths_kv   = arg_parser.get_str("seqlens_kv");
+    std::vector<int> seq_lengths_kv = get_integers_from_string(str_of_lengths_kv);
+
+    HSTU_CHECK(!seq_lengths_q.empty(), "sequence lengths shoud be defined!");
+
+    // assume seq_lengths_kv is same as seq_lengths_q if not defined
+    if(seq_lengths_kv.empty())
+        seq_lengths_kv = seq_lengths_q;
 
     str_of_integers                    = arg_parser.get_str("g_max_seqlens");
     std::vector<int> group_max_seqlens = get_integers_from_string(str_of_integers);
@@ -643,8 +683,11 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
     std::vector<float> group_attn_scales = get_floats_from_string(str_of_floats);
     HSTU_CHECK(!group_attn_scales.empty(), "group attn_scales shoud be defined!");
 
-    // supplement seq_lengths using the last input value if user-provided lengths not enough
-    supplement_array_by_last_element(seq_lengths, num_batch);
+    // supplement seq_lengths_q using the last input value if user-provided lengths not enough
+    supplement_array_by_last_element(seq_lengths_q, num_batch);
+
+    // supplement seq_lengths_kv using the last input value if user-provided lengths not enough
+    supplement_array_by_last_element(seq_lengths_kv, num_batch);
 
     if(!num_targets.empty())
     {
@@ -669,7 +712,8 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
     // supplement group_attn_scales using the last input value if user-provided values not enough
     supplement_array_by_last_element(group_attn_scales, num_group);
 
-    int phy_seqlen     = 0;
+    int phy_seqlen_q   = 0;
+    int phy_seqlen_kv  = 0;
     int max_max_seqlen = 0;
 
     // only consider num_group values even if more values were provided by the user
@@ -678,19 +722,35 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
         max_max_seqlen = max(max_max_seqlen, group_max_seqlens[i]);
     };
 
-    std::vector<int> seq_offsets;
+    std::vector<int> seq_offsets_q;
+    std::vector<int> seq_offsets_kv;
 
-    seq_offsets.push_back(0);
+    seq_offsets_q.push_back(0);
 
     for(int i = 0; i < num_batch; i++)
     {
-        int i_group      = i / num_batch_per_group;
-        int batch_seqlen = num_targets.empty() ? seq_lengths[i] + group_contextual_seqlens[i_group]
-                                               : seq_lengths[i] + num_targets[i] +
-                                                     group_contextual_seqlens[i_group];
+        int i_group = i / num_batch_per_group;
+        int batch_seqlen =
+            num_targets.empty()
+                ? seq_lengths_q[i] + group_contextual_seqlens[i_group]
+                : seq_lengths_q[i] + num_targets[i] + group_contextual_seqlens[i_group];
 
-        phy_seqlen += batch_seqlen;
-        seq_offsets.push_back(phy_seqlen);
+        phy_seqlen_q += batch_seqlen;
+        seq_offsets_q.push_back(phy_seqlen_q);
+    };
+
+    seq_offsets_kv.push_back(0);
+
+    for(int i = 0; i < num_batch; i++)
+    {
+        int i_group = i / num_batch_per_group;
+        int batch_seqlen =
+            num_targets.empty()
+                ? seq_lengths_kv[i] + group_contextual_seqlens[i_group]
+                : seq_lengths_kv[i] + num_targets[i] + group_contextual_seqlens[i_group];
+
+        phy_seqlen_kv += batch_seqlen;
+        seq_offsets_kv.push_back(phy_seqlen_kv);
     };
 
     long total_flops = 0;
@@ -698,9 +758,11 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
     // estimate the total flops occurred, ignoring the scaling and SILu
     for(int i = 0; i < num_batch; i++)
     {
-        int len = seq_offsets[i + 1] - seq_offsets[i];
-        total_flops +=
-            (static_cast<long>(len) * len * hdim_qk + static_cast<long>(len) * hdim_v * len) * 2;
+        int len_q  = seq_offsets_q[i + 1] - seq_offsets_q[i];
+        int len_kv = seq_offsets_kv[i + 1] - seq_offsets_kv[i];
+        total_flops += (static_cast<long>(len_q) * len_kv * hdim_qk +
+                        static_cast<long>(len_q) * hdim_v * len_kv) *
+                       2;
     };
 
     total_flops *= num_head;
@@ -708,13 +770,13 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
     int batches_for_alloc = 1;
 
     ck_tile::HostTensor<InOutDataType> q_host(
-        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen, num_head, hdim_qk});
+        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen_q, num_head, hdim_qk});
     ck_tile::HostTensor<InOutDataType> k_host(
-        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen, num_head, hdim_qk});
+        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen_kv, num_head, hdim_qk});
     ck_tile::HostTensor<InOutDataType> v_host(
-        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen, num_head, hdim_v});
+        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen_kv, num_head, hdim_v});
     ck_tile::HostTensor<InOutDataType> o_host_ref(
-        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen, num_head, hdim_v});
+        std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen_q, num_head, hdim_v});
 
     ck_tile::HostTensor<int8_t> mask_host(
         save_mask
@@ -748,14 +810,16 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
     ck_tile::DeviceMem v_dev(v_host.get_element_space_size_in_bytes());
     ck_tile::DeviceMem o_dev(o_host_ref.get_element_space_size_in_bytes());
 
-    ck_tile::DeviceMem seq_offsets_dev(seq_offsets.size() * sizeof(int));
+    ck_tile::DeviceMem seq_offsets_q_dev(seq_offsets_q.size() * sizeof(int));
+    ck_tile::DeviceMem seq_offsets_kv_dev(seq_offsets_kv.size() * sizeof(int));
     ck_tile::DeviceMem num_targets_dev(num_targets.size() * sizeof(int));
 
     q_dev.ToDevice(q_host.data());
     k_dev.ToDevice(k_host.data());
     v_dev.ToDevice(v_host.data());
 
-    seq_offsets_dev.ToDevice(seq_offsets.data());
+    seq_offsets_q_dev.ToDevice(seq_offsets_q.data());
+    seq_offsets_kv_dev.ToDevice(seq_offsets_kv.data());
     if(!num_targets.empty())
         num_targets_dev.ToDevice(num_targets.data());
 
@@ -778,7 +842,8 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
 
     params.num_batch            = num_batch;
     params.num_group            = num_group;
-    params.seq_offsets_ptr      = seq_offsets_dev.GetDeviceBuffer();
+    params.seq_q_offsets_ptr    = seq_offsets_q_dev.GetDeviceBuffer();
+    params.seq_kv_offsets_ptr   = seq_offsets_kv_dev.GetDeviceBuffer();
     params.max_seqlen           = max_max_seqlen;
     params.q_ptr                = q_dev.GetDeviceBuffer();
     params.k_ptr                = k_dev.GetDeviceBuffer();
@@ -847,7 +912,8 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
                                                                      num_batch / num_group,
                                                                      scale_s,
                                                                      max_max_seqlen,
-                                                                     seq_offsets,
+                                                                     seq_offsets_q,
+                                                                     seq_offsets_kv,
                                                                      num_targets,
                                                                      group_max_seqlens,
                                                                      group_contextual_seqlens,
@@ -857,7 +923,7 @@ bool run_group_hstu(const ck_tile::ArgParser& arg_parser, int num_group)
         });
 
         ck_tile::HostTensor<InOutDataType> o_host(
-            std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen, num_head, hdim_v});
+            std::array<ck_tile::index_t, 4>{batches_for_alloc, phy_seqlen_q, num_head, hdim_v});
 
         o_dev.FromDevice(o_host.data());
 

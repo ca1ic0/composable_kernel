@@ -77,7 +77,8 @@ struct HstuAttentionFwdKernel
         ck_tile::index_t nhead_stride_v;
         ck_tile::index_t nhead_stride_o;
 
-        ck_tile::index_t seqlen;
+        ck_tile::index_t seqlen_q;
+        ck_tile::index_t seqlen_kv;
         ck_tile::index_t hdim_qk;
         ck_tile::index_t hdim_v;
 
@@ -97,7 +98,8 @@ struct HstuAttentionFwdKernel
 
     struct HstuAttentionNoGroupJaggedFwdBaseKargs
     {
-        const int32_t* seq_offsets_ptr;
+        const int32_t* seq_q_offsets_ptr;
+        const int32_t* seq_kv_offsets_ptr;
 
         ck_tile::index_t seq_stride_q;
         ck_tile::index_t seq_stride_k;
@@ -119,7 +121,8 @@ struct HstuAttentionFwdKernel
         ck_tile::index_t hdim_qk;
         ck_tile::index_t hdim_v;
 
-        ck_tile::index_t seqlen;
+        ck_tile::index_t seqlen_q;
+        ck_tile::index_t seqlen_kv;
 
         ck_tile::index_t num_head;
         float scale_s; // scaling value exerted on the immediate Q@K result
@@ -134,7 +137,8 @@ struct HstuAttentionFwdKernel
     {
         ck_tile::index_t num_batch_per_group;
 
-        const int32_t* seq_offsets_ptr;
+        const int32_t* seq_q_offsets_ptr;
+        const int32_t* seq_kv_offsets_ptr;
 
         ck_tile::index_t seq_stride_q;
         ck_tile::index_t seq_stride_k;
@@ -156,7 +160,8 @@ struct HstuAttentionFwdKernel
         ck_tile::index_t hdim_qk;
         ck_tile::index_t hdim_v;
 
-        ck_tile::index_t seqlen;
+        ck_tile::index_t seqlen_q;
+        ck_tile::index_t seqlen_kv;
 
         ck_tile::index_t num_head;
         float scale_s; // scaling value exerted on the immediate Q@K result
@@ -256,7 +261,8 @@ struct HstuAttentionFwdKernel
               const void* v_ptr,
               const void* bias_ptr,
               void* o_ptr,
-              ck_tile::index_t seqlen,
+              ck_tile::index_t seqlen_q,
+              ck_tile::index_t seqlen_kv,
               ck_tile::index_t hdim_qk,
               ck_tile::index_t hdim_v,
               ck_tile::index_t num_head,
@@ -299,7 +305,8 @@ struct HstuAttentionFwdKernel
              nhead_stride_k,
              nhead_stride_v,
              nhead_stride_o,
-             seqlen,
+             seqlen_q,
+             seqlen_kv,
              hdim_qk,
              hdim_v,
              seq_stride_q,
@@ -308,7 +315,8 @@ struct HstuAttentionFwdKernel
              seq_stride_o,
              num_head,
              scale_s,
-             attn_scale ? attn_scale : 1.0f / static_cast<float>(seqlen), // max_seqlen
+             attn_scale ? attn_scale
+                        : 1.0f / static_cast<float>(max(seqlen_q, seqlen_kv)), // max_seqlen
              contextual_seqlen,
              window_size,
              min_full_attn_seqlen}, // args for common karg
@@ -338,7 +346,8 @@ struct HstuAttentionFwdKernel
               const void* v_ptr,
               const void* bias_ptr,
               void* o_ptr,
-              const void* seq_offsets_ptr,
+              const void* seq_q_offsets_ptr,
+              const void* seq_kv_offsets_ptr,
               ck_tile::index_t max_seqlen,
               ck_tile::index_t hdim_qk,
               ck_tile::index_t hdim_v,
@@ -364,7 +373,8 @@ struct HstuAttentionFwdKernel
               uint64_t philox_offset)
     {
         Kargs kargs{
-            {reinterpret_cast<const int32_t*>(seq_offsets_ptr),
+            {reinterpret_cast<const int32_t*>(seq_q_offsets_ptr),
+             reinterpret_cast<const int32_t*>(seq_kv_offsets_ptr),
              seq_stride_q,
              seq_stride_k,
              seq_stride_v,
@@ -380,7 +390,8 @@ struct HstuAttentionFwdKernel
              nhead_stride_o,
              hdim_qk,
              hdim_v,
-             -1, // seqlen will be updated by another pointer
+             -1, // seqlen_q will be updated by another pointer
+             -1, // seqlen_kv will be updated by another pointer
              num_head,
              scale_s,
              attn_scale ? attn_scale : 1.0f / static_cast<float>(max_seqlen),
@@ -413,7 +424,8 @@ struct HstuAttentionFwdKernel
               const void* bias_ptr,
               void* o_ptr,
               ck_tile::index_t num_batch_per_group,
-              const void* seq_offsets_ptr,
+              const void* seq_q_offsets_ptr,
+              const void* seq_kv_offsets_ptr,
               const void* group_max_seqlen_ptr,
               const void* group_contextual_seqlen_ptr,
               const void* group_window_size_ptr,
@@ -440,7 +452,8 @@ struct HstuAttentionFwdKernel
     {
         Kargs kargs{
             {num_batch_per_group,
-             reinterpret_cast<const int32_t*>(seq_offsets_ptr),
+             reinterpret_cast<const int32_t*>(seq_q_offsets_ptr),
+             reinterpret_cast<const int32_t*>(seq_kv_offsets_ptr),
              seq_stride_q,
              seq_stride_k,
              seq_stride_v,
@@ -456,7 +469,8 @@ struct HstuAttentionFwdKernel
              nhead_stride_o,
              hdim_qk,
              hdim_v,
-             -1, // seqlen will be updated by another pointer
+             -1, // seqlen_q will be updated by another pointer
+             -1, // seqlen_kv will be updated by another pointer
              num_head,
              scale_s,
              1.0f, // to be set according to the per-group attn_scale and max_seqlen
@@ -613,8 +627,8 @@ struct HstuAttentionFwdKernel
         if constexpr(kIsJagged)
         {
             // get starting offset for each batch
-            const long_index_t query_start = kargs.seq_offsets_ptr[i_batch];
-            const long_index_t key_start   = query_start;
+            const long_index_t query_start = kargs.seq_q_offsets_ptr[i_batch];
+            const long_index_t key_start   = kargs.seq_kv_offsets_ptr[i_batch];
 
             batch_offset_q = query_start * kargs.seq_stride_q;
             batch_offset_k = key_start * kargs.seq_stride_k;
@@ -626,7 +640,10 @@ struct HstuAttentionFwdKernel
             }
             batch_offset_o = query_start * kargs.seq_stride_o;
 
-            kargs.seqlen = kargs.seq_offsets_ptr[i_batch + 1] - kargs.seq_offsets_ptr[i_batch];
+            kargs.seqlen_q =
+                kargs.seq_q_offsets_ptr[i_batch + 1] - kargs.seq_q_offsets_ptr[i_batch];
+            kargs.seqlen_kv =
+                kargs.seq_kv_offsets_ptr[i_batch + 1] - kargs.seq_kv_offsets_ptr[i_batch];
 
             // read from device memory for the group specific mask and scaling parameters
             if constexpr(kUseGroup)
@@ -656,16 +673,16 @@ struct HstuAttentionFwdKernel
 
         int num_target = (kargs.num_targets_ptr == nullptr) ? 0 : kargs.num_targets_ptr[i_batch];
 
-        index_t seqlen_in_first_split = kargs.seqlen;
+        index_t seqlen_in_first_split = kargs.seqlen_q;
         bool is_tile_in_first_split   = true;
         index_t i_m0;
 
         if(kargs.min_full_attn_seqlen > 0)
         {
             // need consider for cases where min_full_attn_seqlen be bigger than max_uih_len
-            if(kargs.seqlen - num_target > kargs.min_full_attn_seqlen)
+            if(kargs.seqlen_q - num_target > kargs.min_full_attn_seqlen)
             {
-                seqlen_in_first_split = kargs.seqlen - num_target - kargs.min_full_attn_seqlen;
+                seqlen_in_first_split = kargs.seqlen_q - num_target - kargs.min_full_attn_seqlen;
 
                 index_t num_tile_in_first_split =
                     ck_tile::integer_divide_ceil(seqlen_in_first_split, HstuAttentionPipeline::kM0);
@@ -684,7 +701,7 @@ struct HstuAttentionFwdKernel
                 is_tile_in_first_split = false;
 
                 // adjust the min_full_attn_seqlen to be passed to HstuBlockMask constructor
-                kargs.min_full_attn_seqlen = kargs.seqlen - num_target;
+                kargs.min_full_attn_seqlen = kargs.seqlen_q - num_target;
 
                 i_m0 = __builtin_amdgcn_readfirstlane(i_tile_m * HstuAttentionPipeline::kM0);
             };
@@ -694,7 +711,7 @@ struct HstuAttentionFwdKernel
 
         const index_t i_n1 = __builtin_amdgcn_readfirstlane(i_tile_n * HstuAttentionPipeline::kN1);
 
-        index_t seqlen_q_in_ctrl = is_tile_in_first_split ? seqlen_in_first_split : kargs.seqlen;
+        index_t seqlen_q_in_ctrl = is_tile_in_first_split ? seqlen_in_first_split : kargs.seqlen_q;
 
         if(seqlen_q_in_ctrl <= i_m0)
             return;
@@ -729,7 +746,7 @@ struct HstuAttentionFwdKernel
         const auto k_dram = [&]() {
             const auto k_dram_naive = make_naive_tensor_view<address_space_enum::global>(
                 k_ptr,
-                make_tuple(kargs.seqlen, kargs.hdim_qk),
+                make_tuple(kargs.seqlen_kv, kargs.hdim_qk),
                 make_tuple(kargs.seq_stride_k, 1),
                 number<HstuAttentionPipeline::kAlignmentK>{},
                 number<1>{});
@@ -742,7 +759,7 @@ struct HstuAttentionFwdKernel
         const auto v_dram = [&]() {
             const auto v_dram_naive = make_naive_tensor_view<address_space_enum::global>(
                 v_ptr,
-                make_tuple(kargs.seqlen, kargs.hdim_v),
+                make_tuple(kargs.seqlen_kv, kargs.hdim_v),
                 make_tuple(kargs.seq_stride_v, 1),
                 number<HstuAttentionPipeline::kAlignmentV>{},
                 number<1>{});
@@ -750,7 +767,7 @@ struct HstuAttentionFwdKernel
             const auto v_dram_transposed =
                 transform_tensor_view(v_dram_naive,
                                       make_tuple(make_pass_through_transform(kargs.hdim_v),
-                                                 make_pass_through_transform(kargs.seqlen)),
+                                                 make_pass_through_transform(kargs.seqlen_kv)),
                                       make_tuple(sequence<1>{}, sequence<0>{}),
                                       make_tuple(sequence<0>{}, sequence<1>{}));
 
@@ -793,7 +810,7 @@ struct HstuAttentionFwdKernel
                 const auto bias_dram = [&]() {
                     const auto bias_dram_naive = make_naive_tensor_view<address_space_enum::global>(
                         bias_ptr,
-                        make_tuple(seqlen_q_in_ctrl, kargs.seqlen),
+                        make_tuple(seqlen_q_in_ctrl, kargs.seqlen_kv),
                         make_tuple(kargs.seq_stride_bias, 1),
                         number<HstuAttentionPipeline::kAlignmentBias>{},
                         number<1>{});
@@ -834,7 +851,8 @@ struct HstuAttentionFwdKernel
                 using HstuMaskType = typename ck_tile::HstuBlockMasking<kHasCausalMask, true>::Type;
                 const auto mask =
                     make_hstu_block_mask_with_local<HstuMaskType>(is_tile_in_first_split,
-                                                                  kargs.seqlen,
+                                                                  kargs.seqlen_q,
+                                                                  kargs.seqlen_kv,
                                                                   kargs.contextual_seqlen,
                                                                   num_target,
                                                                   kargs.window_size,
@@ -855,7 +873,7 @@ struct HstuAttentionFwdKernel
                 using HstuMaskType =
                     typename ck_tile::HstuBlockMasking<kHasCausalMask, false>::Type;
                 const auto mask = make_hstu_block_mask_without_local<HstuMaskType>(
-                    kargs.seqlen, kargs.contextual_seqlen, num_target);
+                    kargs.seqlen_q, kargs.seqlen_kv, kargs.contextual_seqlen, num_target);
 
                 return HstuAttentionPipeline{}(q_dram_window,
                                                k_dram_window,
