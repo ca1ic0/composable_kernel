@@ -606,7 +606,7 @@ struct HstuAttentionFwdKernel
 
     CK_TILE_HOST static constexpr auto BlockSize() { return dim3(kBlockSize); }
 
-    CK_TILE_HOST_DEVICE static constexpr ck_tile::index_t GetSmemSize()
+    CK_TILE_DEVICE static constexpr ck_tile::index_t GetSmemSize()
     {
         return ck_tile::max(HstuAttentionPipeline::GetSmemSize(), EpiloguePipeline::GetSmemSize());
     }
