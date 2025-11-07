@@ -5,6 +5,7 @@ add_executable(tile_example_gemm_reduce EXCLUDE_FROM_ALL gemm_splitk_two_stage_r
 add_executable(tile_example_gemm_splitk_two_stage EXCLUDE_FROM_ALL gemm_splitk_two_stage.cpp)
 set(EXAMPLE_GEMM_COMPILE_OPTIONS)
 set(EXAMPLE_WEIGHT_PRESHUFFLE_COMPILE_OPTIONS)
+option(CK_TILE_EXAMPLE_ROUTE_DISPATCHER_TO_MAKE "Route ck_tile::WarpGemmDispatcher to MakeWarpGemm in examples" OFF)
 if(CK_USE_OCP_FP8)
   list(APPEND EXAMPLE_GEMM_COMPILE_OPTIONS -DCK_TILE_USE_OCP_FP8)
 endif()
@@ -13,8 +14,14 @@ list(APPEND EXAMPLE_WEIGHT_PRESHUFFLE_COMPILE_OPTIONS -Wno-unused-local-typedef)
 list(APPEND EXAMPLE_WEIGHT_PRESHUFFLE_COMPILE_OPTIONS -Wno-gnu-line-marker)
 list(APPEND EXAMPLE_WEIGHT_PRESHUFFLE_COMPILE_OPTIONS --save-temps)
 list(APPEND EXAMPLE_WEIGHT_PRESHUFFLE_COMPILE_OPTIONS "SHELL: -mllvm -greedy-reverse-local-assignment=1 -mllvm -enable-noalias-to-md-conversion=0")
+
+# When routing dispatcher to MakeWarpGemm is enabled, add the macro to the shared options
+if(CK_TILE_EXAMPLE_ROUTE_DISPATCHER_TO_MAKE)
+  list(APPEND EXAMPLE_GEMM_COMPILE_OPTIONS -DCK_TILE_ROUTE_WARP_GEMM_DISPATCHER_TO_MAKE)
+endif()
 target_compile_options(tile_example_gemm_basic PRIVATE ${EXAMPLE_GEMM_COMPILE_OPTIONS})
 target_compile_options(tile_example_gemm_universal PRIVATE ${EXAMPLE_GEMM_COMPILE_OPTIONS})
 target_compile_options(tile_example_gemm_weight_preshuffle PRIVATE ${EXAMPLE_WEIGHT_PRESHUFFLE_COMPILE_OPTIONS})
 target_compile_options(tile_example_gemm_reduce PRIVATE ${EXAMPLE_GEMM_COMPILE_OPTIONS})
 target_compile_options(tile_example_gemm_splitk_two_stage PRIVATE ${EXAMPLE_GEMM_COMPILE_OPTIONS})
+

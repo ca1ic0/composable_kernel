@@ -22,6 +22,16 @@ enum class WGAttrCtlEnum
     // raw_a_a_a = 3,  // c-agpr, a-agpr, b-agpr
 };
 
+// Primary template: generic MFMA warp-gemm attribute (to be specialized per supported shape)
+template <typename ADataType,
+          typename BDataType,
+          typename CDataType,
+          index_t kM,
+          index_t kN,
+          index_t kK,
+          WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl; // no definition, only specializations are provided
+
 #define DISPATCH_MFMA_(mfma_, dmod_, amod_, bmod_, cmod_)       \
     if constexpr(post_nop_)                                     \
     {                                                           \
@@ -191,8 +201,8 @@ struct WarpGemmAttributeMfmaImplF32F32F32M32N32K2
 };
 
 // V_MFMA_F32_16x16x32_BF16
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplBf16Bf16F32M16N16K32
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 16, 16, 32, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = bf16_t;
@@ -254,8 +264,8 @@ struct WarpGemmAttributeMfmaImplBf16Bf16F32M16N16K32
     }
 };
 // FP16
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplF16F16F32M32N32K8
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 32, 32, 8, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = fp16_t;
@@ -317,8 +327,8 @@ struct WarpGemmAttributeMfmaImplF16F16F32M32N32K8
     }
 };
 
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplF16F16F32M16N16K16
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 16, 16, 16, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = fp16_t;
@@ -380,8 +390,8 @@ struct WarpGemmAttributeMfmaImplF16F16F32M16N16K16
     }
 };
 
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplF16F16F32M16N16K32
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 16, 16, 32, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = fp16_t;
@@ -443,8 +453,8 @@ struct WarpGemmAttributeMfmaImplF16F16F32M16N16K32
     }
 };
 
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplF16F16F32M4N64K4
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 4, 64, 4, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = fp16_t;
@@ -507,8 +517,8 @@ struct WarpGemmAttributeMfmaImplF16F16F32M4N64K4
     }
 };
 
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplF16F16F32M64N4K4
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 64, 4, 4, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = fp16_t;
@@ -572,8 +582,8 @@ struct WarpGemmAttributeMfmaImplF16F16F32M64N4K4
 };
 
 // Bf16
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplBf16Bf16F32M32N32K8
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 32, 32, 8, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = bf16_t;
@@ -661,8 +671,8 @@ struct WarpGemmAttributeMfmaImplBf16Bf16F32M32N32K8
     }
 };
 
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplBf16Bf16F32M16N16K16
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 16, 16, 16, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = bf16_t;
@@ -749,8 +759,8 @@ struct WarpGemmAttributeMfmaImplBf16Bf16F32M16N16K16
     }
 };
 
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplBf16Bf16F32M4N64K4
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 4, 64, 4, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = bf16_t;
@@ -839,8 +849,8 @@ struct WarpGemmAttributeMfmaImplBf16Bf16F32M4N64K4
     }
 };
 
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplBf16Bf16F32M64N4K4
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 64, 4, 4, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = bf16_t;
@@ -930,8 +940,8 @@ struct WarpGemmAttributeMfmaImplBf16Bf16F32M64N4K4
 };
 
 // gfx950
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplF16F16F32M32N32K16
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 32, 32, 16, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = fp16_t;
@@ -1044,8 +1054,8 @@ struct WarpGemmAttributeMfmaImplF16F16F32M32N32K16
     }
 };
 
-template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
-struct WarpGemmAttributeMfmaImplBf16Bf16F32M32N32K16
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 32, 32, 16, Ctrl_>
 {
     static constexpr WGAttrCtlEnum Ctrl = Ctrl_;
     using ADataType                     = bf16_t;
@@ -1157,6 +1167,60 @@ struct WarpGemmAttributeMfmaImplBf16Bf16F32M32N32K16
 #endif
     }
 };
+
+// ---------------------------------------------------------------------------------
+// Backward-compatibility aliases (preserve original names)
+// ---------------------------------------------------------------------------------
+
+// BF16
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplBf16Bf16F32M16N16K32 =
+    WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 16, 16, 32, Ctrl_>;
+
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplBf16Bf16F32M32N32K8 =
+    WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 32, 32, 8, Ctrl_>;
+
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplBf16Bf16F32M16N16K16 =
+    WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 16, 16, 16, Ctrl_>;
+
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplBf16Bf16F32M4N64K4 =
+    WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 4, 64, 4, Ctrl_>;
+
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplBf16Bf16F32M64N4K4 =
+    WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 64, 4, 4, Ctrl_>;
+
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplBf16Bf16F32M32N32K16 =
+    WarpGemmAttributeMfmaImpl<bf16_t, bf16_t, float, 32, 32, 16, Ctrl_>;
+
+// F16
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplF16F16F32M32N32K8 =
+    WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 32, 32, 8, Ctrl_>;
+
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplF16F16F32M16N16K16 =
+    WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 16, 16, 16, Ctrl_>;
+
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplF16F16F32M16N16K32 =
+    WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 16, 16, 32, Ctrl_>;
+
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplF16F16F32M4N64K4 =
+    WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 4, 64, 4, Ctrl_>;
+
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplF16F16F32M64N4K4 =
+    WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 64, 4, 4, Ctrl_>;
+
+template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
+using WarpGemmAttributeMfmaImplF16F16F32M32N32K16 =
+    WarpGemmAttributeMfmaImpl<fp16_t, fp16_t, float, 32, 32, 16, Ctrl_>;
 
 // FP8
 template <typename AType_, typename BType_, WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
@@ -1316,6 +1380,31 @@ struct WarpGemmAttributeMfmaImpl_f32_16x16x32_f8_base
         return CVecType{0.f};
 #endif
     }
+};
+
+// Map FP8/BF8 shapes to the primary template via specializations (reuse base impl)
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp8_t, fp8_t, float, 16, 16, 32, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_16x16x32_f8_base<fp8_t, fp8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp8_t, bf8_t, float, 16, 16, 32, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_16x16x32_f8_base<fp8_t, bf8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf8_t, fp8_t, float, 16, 16, 32, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_16x16x32_f8_base<bf8_t, fp8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf8_t, bf8_t, float, 16, 16, 32, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_16x16x32_f8_base<bf8_t, bf8_t, Ctrl_>
+{
 };
 
 template <typename AType_, typename BType_, WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
@@ -1501,12 +1590,38 @@ struct WarpGemmAttributeMfmaImpl_f32_32x32x16_f8_base
     }
 };
 
+// Map FP8/BF8 32x32x16 shapes to the primary template via specializations (reuse base impl)
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp8_t, fp8_t, float, 32, 32, 16, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_32x32x16_f8_base<fp8_t, fp8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp8_t, bf8_t, float, 32, 32, 16, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_32x32x16_f8_base<fp8_t, bf8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf8_t, fp8_t, float, 32, 32, 16, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_32x32x16_f8_base<bf8_t, fp8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf8_t, bf8_t, float, 32, 32, 16, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_32x32x16_f8_base<bf8_t, bf8_t, Ctrl_>
+{
+};
+
+// Back-compat aliases now point to primary-template specializations
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_32x32x16_fp8_fp8 =
-    WarpGemmAttributeMfmaImpl_f32_32x32x16_f8_base<fp8_t, fp8_t, Ctrl_>;
+    WarpGemmAttributeMfmaImpl<fp8_t, fp8_t, float, 32, 32, 16, Ctrl_>;
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_16x16x32_fp8_fp8 =
-    WarpGemmAttributeMfmaImpl_f32_16x16x32_f8_base<fp8_t, fp8_t, Ctrl_>;
+    WarpGemmAttributeMfmaImpl<fp8_t, fp8_t, float, 16, 16, 32, Ctrl_>;
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_32x32x16_fp8_bf8 =
     WarpGemmAttributeMfmaImpl_f32_32x32x16_f8_base<fp8_t, bf8_t, Ctrl_>;
@@ -1516,7 +1631,7 @@ using WarpGemmAttributeMfmaImpl_f32_16x16x32_fp8_bf8 =
 
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_16x16x32_bf8_bf8 =
-    WarpGemmAttributeMfmaImpl_f32_16x16x32_f8_base<bf8_t, bf8_t, Ctrl_>;
+    WarpGemmAttributeMfmaImpl<bf8_t, bf8_t, float, 16, 16, 32, Ctrl_>;
 
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_32x32x16_bf8_fp8 =
@@ -1608,17 +1723,43 @@ struct WarpGemmAttributeMfmaImpl_f32_16x16x128_f8_bf8_base
     }
 };
 
+// Map FP8/BF8 16x16x128 scale shapes to the primary template via specializations
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp8_t, fp8_t, float, 16, 16, 128, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_16x16x128_f8_bf8_base<fp8_t, fp8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp8_t, bf8_t, float, 16, 16, 128, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_16x16x128_f8_bf8_base<fp8_t, bf8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf8_t, fp8_t, float, 16, 16, 128, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_16x16x128_f8_bf8_base<bf8_t, fp8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf8_t, bf8_t, float, 16, 16, 128, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_16x16x128_f8_bf8_base<bf8_t, bf8_t, Ctrl_>
+{
+};
+
+// Back-compat aliases
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_16x16x128_fp8_fp8 =
-    WarpGemmAttributeMfmaImpl_f32_16x16x128_f8_bf8_base<fp8_t, fp8_t, Ctrl_>;
+    WarpGemmAttributeMfmaImpl<fp8_t, fp8_t, float, 16, 16, 128, Ctrl_>;
 
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_16x16x128_fp8_bf8 =
-    WarpGemmAttributeMfmaImpl_f32_16x16x128_f8_bf8_base<fp8_t, bf8_t, Ctrl_>;
+    WarpGemmAttributeMfmaImpl<fp8_t, bf8_t, float, 16, 16, 128, Ctrl_>;
 
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_16x16x128_bf8_fp8 =
-    WarpGemmAttributeMfmaImpl_f32_16x16x128_f8_bf8_base<bf8_t, fp8_t, Ctrl_>;
+    WarpGemmAttributeMfmaImpl<bf8_t, fp8_t, float, 16, 16, 128, Ctrl_>;
 
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_16x16x128_bf8_bf8 =
@@ -1798,23 +1939,49 @@ struct WarpGemmAttributeMfmaImpl_f32_32x32x64_f8_bf8_base
     }
 };
 
+// Map FP8/BF8 32x32x64 scale shapes to the primary template via specializations
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp8_t, fp8_t, float, 32, 32, 64, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_32x32x64_f8_bf8_base<fp8_t, fp8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<fp8_t, bf8_t, float, 32, 32, 64, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_32x32x64_f8_bf8_base<fp8_t, bf8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf8_t, fp8_t, float, 32, 32, 64, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_32x32x64_f8_bf8_base<bf8_t, fp8_t, Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<bf8_t, bf8_t, float, 32, 32, 64, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_f32_32x32x64_f8_bf8_base<bf8_t, bf8_t, Ctrl_>
+{
+};
+
+// Back-compat aliases
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_32x32x64_fp8_fp8 =
-    WarpGemmAttributeMfmaImpl_f32_32x32x64_f8_bf8_base<fp8_t, fp8_t, Ctrl_>;
+    WarpGemmAttributeMfmaImpl<fp8_t, fp8_t, float, 32, 32, 64, Ctrl_>;
 
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_32x32x64_fp8_bf8 =
-    WarpGemmAttributeMfmaImpl_f32_32x32x64_f8_bf8_base<fp8_t, bf8_t, Ctrl_>;
+    WarpGemmAttributeMfmaImpl<fp8_t, bf8_t, float, 32, 32, 64, Ctrl_>;
 
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_32x32x64_bf8_fp8 =
-    WarpGemmAttributeMfmaImpl_f32_32x32x64_f8_bf8_base<bf8_t, fp8_t, Ctrl_>;
+    WarpGemmAttributeMfmaImpl<bf8_t, fp8_t, float, 32, 32, 64, Ctrl_>;
 
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 using WarpGemmAttributeMfmaImpl_f32_32x32x64_bf8_bf8 =
-    WarpGemmAttributeMfmaImpl_f32_32x32x64_f8_bf8_base<bf8_t, bf8_t, Ctrl_>;
+    WarpGemmAttributeMfmaImpl<bf8_t, bf8_t, float, 32, 32, 64, Ctrl_>;
 
-// int8
+// int8: map shapes to the primary template via specializations (reuse the concrete impl bodies)
 template <WGAttrCtlEnum Ctrl_ = WGAttrCtlEnum::Default_>
 struct WarpGemmAttributeMfmaImpl_i32_32x32x16_i8
 {
@@ -2060,6 +2227,31 @@ struct WarpGemmAttributeMfmaImpl_i32_32x32x32_i8
         operator()(c_vec, a_vec, b_vec);
         return c_vec;
     }
+};
+
+// Primary-template specializations delegating to the bodies above
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<int8_t, int8_t, int32_t, 32, 32, 16, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_i32_32x32x16_i8<Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<int8_t, int8_t, int32_t, 16, 16, 32, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_i32_16x16x32_i8<Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<int8_t, int8_t, int32_t, 16, 16, 64, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_i32_16x16x64_i8<Ctrl_>
+{
+};
+
+template <WGAttrCtlEnum Ctrl_>
+struct WarpGemmAttributeMfmaImpl<int8_t, int8_t, int32_t, 32, 32, 32, Ctrl_>
+    : WarpGemmAttributeMfmaImpl_i32_32x32x32_i8<Ctrl_>
+{
 };
 
 #undef DISPATCH_MFMA_
