@@ -418,7 +418,8 @@ struct SelectedKernel {{
         false, false>;
     
     // Tile partitioner
-    using TilePartitioner = ck_tile::GemmSpatiallyLocalTilePartitioner<TileShape, 8, 4>;
+    // using TilePartitioner = ck_tile::GemmSpatiallyLocalTilePartitioner<TileShape, 8, 4>;
+    using TilePartitioner = ck_tile::GemmTile1DPartitioner<TileShape>;
     
     // Traits
     using Traits = ck_tile::TileGemmTraits<kPadM, kPadN, kPadK, ALayout, BLayout, CLayout, NumWaveGroups>;
