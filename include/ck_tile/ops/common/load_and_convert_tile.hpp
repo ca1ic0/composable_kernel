@@ -8,12 +8,13 @@
 
 namespace ck_tile {
 
-template <typename DstDataType, index_t UnaryOpSize>
+template <typename DstDataType, index_t UnaryOpSize, bool LoadTranspose = false>
 struct InterleavedPKTypeLoader
 {
     template <typename WarpWindow, typename WarpTile>
     CK_TILE_DEVICE static void load_interleaved_pk_type(WarpTile& dst, const WarpWindow& src)
     {
+        static_assert(!LoadTranspose, "LoadTranspose not supported with pk_int4_t");
         static_assert(WarpTile::get_thread_buffer_size() % UnaryOpSize == 0);
         constexpr index_t thread_buffer_size = WarpTile::get_thread_buffer_size() / UnaryOpSize;
         const auto tmp                       = load_tile(src);
@@ -25,6 +26,33 @@ struct InterleavedPKTypeLoader
             elementwise_op(dst.get_thread_buffer().template get_as<DstVectorType>()(i),
                            tmp.get_thread_buffer().template get_as<pk_int4x4_t>()[i]);
         });
+    }
+
+    template <typename SrcDataType, typename WarpWindow, typename WarpTile>
+    CK_TILE_DEVICE static void load_with_type_convert(WarpTile& dst, const WarpWindow& src)
+    {
+        auto tmp = [&]() {
+            if constexpr(LoadTranspose)
+            {
+                return load_tile_transpose(src);
+            }
+            else
+            {
+                return load_tile(src);
+            }
+        }();
+
+        if constexpr(std::is_same_v<SrcDataType, DstDataType>)
+        {
+            dst = tmp;
+        }
+        else
+        {
+            sweep_tile(dst, [&](auto i) {
+                element_wise::PassThrough elementwise_op{};
+                elementwise_op(dst(i), tmp(i));
+            });
+        }
     }
 };
 
@@ -38,17 +66,13 @@ CK_TILE_DEVICE void load_int4_tile(WarpTile& dst, const WarpWindow& src)
 {
     if constexpr(std::is_same_v<SrcDataType, pk_int4_t>)
     {
-        static_assert(!LoadTranspose, "LoadTranspose not supported with pk_int4_t");
-        InterleavedPKTypeLoader<DstDataType, UnaryOpSize>::load_interleaved_pk_type(dst, src);
-    }
-    else if constexpr(LoadTranspose)
-    {
-        dst = load_tile_transpose(src);
+        InterleavedPKTypeLoader<DstDataType, UnaryOpSize, LoadTranspose>::load_interleaved_pk_type(
+            dst, src);
     }
     else
     {
-        load_tile(dst, src);
+        InterleavedPKTypeLoader<DstDataType, UnaryOpSize, LoadTranspose>::
+            template load_with_type_convert<SrcDataType>(dst, src);
     }
 }
-
 } // namespace ck_tile
