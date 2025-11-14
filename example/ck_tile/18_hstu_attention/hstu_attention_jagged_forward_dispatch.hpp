@@ -33,8 +33,7 @@ struct jagged_forward_causal_softmax_bias_dropout_dispatch
                                     HstuAttentionWithSoftmaxFwdTileSetting<MaxK>,
                                     HstuAttentionNoSoftmaxFwdTileSetting<MaxK>>::Type;
 
-    template <typename HstuTraits>
-    using HstuPipelineProblemTemp = ck_tile::HstuAttentionFwdPipelineProblem<
+    using HstuPipelineProblem = ck_tile::HstuAttentionFwdPipelineProblem<
         InOutDataType,
         typename HstuAttentionFwdTypeConfig<InOutDataType>::GemmAccDataType,
         typename HstuAttentionFwdTypeConfig<InOutDataType>::CompDataType,
@@ -45,8 +44,7 @@ struct jagged_forward_causal_softmax_bias_dropout_dispatch
         kHasDropout,
         kUseCausal,
         kUseSoftmax,
-        HstuAttentionTileSetting,
-        HstuTraits>;
+        HstuAttentionTileSetting>;
 
     static void Run(HstuAttentionNoGroupFwdParams& param, hipStream_t stream)
     {
@@ -68,8 +66,6 @@ struct jagged_forward_causal_softmax_bias_dropout_dispatch
                                                                kPadHeadDimV,
                                                                occupancy>;
 
-            using HstuPipelineProblem = HstuPipelineProblemTemp<HstuTraits>;
-
             using HstuEpilogue = ck_tile::NRepetitions2DEpilogue<ck_tile::Default2DEpilogueProblem<
                 typename HstuAttentionFwdTypeConfig<InOutDataType>::OaccDataType,
                 typename HstuAttentionFwdTypeConfig<InOutDataType>::ODataType,
@@ -78,8 +74,8 @@ struct jagged_forward_causal_softmax_bias_dropout_dispatch
 
             using HstuPipeline = std::conditional_t<
                 kUseSoftmax,
-                ck_tile::HstuAttentionWithSoftmaxFwdPipelineQRKSVS<HstuPipelineProblem>,
-                ck_tile::HstuAttentionNoSoftmaxFwdPipelineQRKSVS<HstuPipelineProblem>>;
+                ck_tile::HstuAttentionWithSoftmaxFwdPipelineQRKSVS<HstuPipelineProblem, HstuTraits>,
+                ck_tile::HstuAttentionNoSoftmaxFwdPipelineQRKSVS<HstuPipelineProblem, HstuTraits>>;
 
             using HstuKernel = ck_tile::HstuAttentionFwdKernel<HstuPipeline, HstuEpilogue>;
 
