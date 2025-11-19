@@ -235,12 +235,16 @@ struct GemmPipelineAgBgCrImplBase
 
         auto a_lds_load_tile_distr = []() {
             if constexpr(is_a_load_tr)
+            {
                 return make_static_tile_distribution(
                     typename InputTileDistributionTraits<
                         typename ALdsLoadTileDistr::DstrEncode,
                         typename Problem::ADataType>::TransposedDstrEncode{});
+            }
             else
+            {
                 return ALdsLoadTileDistr{};
+            }
         }();
         auto a_lds_gemm_window =
             make_tile_window(a_lds_block_view, a_lds_shape, {0, 0}, a_lds_load_tile_distr);
@@ -272,12 +276,16 @@ struct GemmPipelineAgBgCrImplBase
 
         auto b_lds_load_tile_distr = []() {
             if constexpr(is_b_load_tr)
+            {
                 return make_static_tile_distribution(
                     typename InputTileDistributionTraits<
                         typename BLdsLoadTileDistr::DstrEncode,
                         typename Problem::BDataType>::TransposedDstrEncode{});
+            }
             else
+            {
                 return BLdsLoadTileDistr{};
+            }
         }();
         auto b_lds_gemm_window =
             make_tile_window(b_lds_block_view, b_lds_shape, {0, 0}, b_lds_load_tile_distr);
