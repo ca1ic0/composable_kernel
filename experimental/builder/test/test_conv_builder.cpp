@@ -3,8 +3,6 @@
 
 #include <ck_tile/builder/conv_builder.hpp>
 #include <ck_tile/builder/reflect/conv_description.hpp>
-#include "impl/conv_signature_types.hpp"
-#include "impl/conv_algorithm_types.hpp"
 
 #include <gtest/gtest.h>
 
@@ -13,7 +11,7 @@ namespace ckb = ck_tile::builder;
 // This test demonstrates how to specify a convolution kernel using the CK Builder API.
 //
 // STRATEGY:
-// We are targeting the DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3 factory specialization.
+// This targets the DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3 operation template.
 // This factory is selected when the algorithm satisfies the
 // DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3 concept, which requires:
 //   - ThreadBlock specification (block_size, tile_size)
@@ -21,6 +19,7 @@ namespace ckb = ck_tile::builder;
 //   - TransferABC configuration (memory transfer patterns for A, B, C tensors)
 //   - ConvFwdSpecialization and GemmSpecialization
 //   - BlockGemm configuration (pipeline version and scheduler)
+// Note: we are going to revert to explicitly stating the operation template.
 //
 // The signature specifies:
 //   - 2D spatial convolution
@@ -36,80 +35,117 @@ TEST(BuilderExample, SimpleConvolutionExample)
     struct Signature
     {
         int spatial_dim = 2;
-        // TOOD: This direction should be OK as defualt, but the factory fails.
+        // TODO: This direction should be OK as default, but the factory fails.
         ckb::ConvDirection direction = ckb::ConvDirection::FORWARD;
         ckb::GroupConvLayout layout  = ckb::GroupConvLayout2D::GNHWC_GKYXC_GNHWK;
         ckb::DataType data_type      = ckb::DataType::FP16;
     };
-    // Verify that the signature conforms to the expected descriptor
+    // Verify that the signature structure conforms to the signature concept.
     static_assert(ckb::ConvSignatureDescriptor<Signature>);
     // Specify the signature in a constexpr value
     constexpr Signature kSignature{};
     // Verify the signature value is valid
     static_assert(ckb::ValidConvSignature<kSignature>);
 
-    // Define the algorithm specification using the same structure as test_conv_description.cpp
-    // TODO: We should be able to build this struct without the ckb::test helpers.
+    // Define a struct to specify the algorithm.
+    // TODO improve CK Builder schema to reduce duplication and simplify.
     struct DefaultAlgorithm
     {
-        ckb::test::ThreadBlock thread_block{.block_size = 256,
-                                            .tile_size  = {.m = 256, .n = 256, .k = 32}};
+        using ConvSpecial = ckb::ConvFwdSpecialization;
+        using GemmSpecial = ckb::GemmSpecialization;
+        using PipeVers    = ckb::PipelineVersion;
+        using PipeSched   = ckb::PipelineScheduler;
 
-        ckb::test::GridwiseXdlGemm gridwise_gemm{.ak1            = 8,
-                                                 .bk1            = 8,
-                                                 .m_per_xdl      = 16,
-                                                 .n_per_xdl      = 16,
-                                                 .m_xdl_per_wave = 4,
-                                                 .n_xdl_per_wave = 4};
+        struct ThreadBlock
+        {
+            int block_size = 256;
+            struct TileSize
+            {
+                int m = 256;
+                int n = 256;
+                int k = 32;
+            } tile_size;
+        } thread_block;
 
-        ckb::test::TransferABC transfer{
-            .a =
+        struct GridwiseGemm
+        {
+            int ak1            = 8;
+            int bk1            = 8;
+            int m_per_xdl      = 16;
+            int n_per_xdl      = 16;
+            int m_xdl_per_wave = 4;
+            int n_xdl_per_wave = 4;
+        } gridwise_gemm;
+
+        struct TransferABC
+        {
+            struct TransferAB
+            {
+                struct BlockTransfer
                 {
-                    .block_transfer              = {.k0 = 4, .m_n = 256, .k1 = 8},
-                    .lds_transfer                = {.src_vector_dim            = 2,
-                                                    .src_scalar_per_vector     = 8,
-                                                    .lds_dst_scalar_per_vector = 8,
-                                                    .is_direct_load            = true,
-                                                    .lds_padding               = false},
-                    .block_transfer_access_order = {.order = {0, 1, 2}},
-                    .src_access_order            = {.order = {0, 1, 2}},
-
-                },
-            .b =
+                    int k0  = 4;
+                    int m_n = 256;
+                    int k1  = 8;
+                } block_transfer;
+                struct LdsTransfer
                 {
-                    .block_transfer              = {.k0 = 4, .m_n = 256, .k1 = 8},
-                    .lds_transfer                = {.src_vector_dim            = 2,
-                                                    .src_scalar_per_vector     = 8,
-                                                    .lds_dst_scalar_per_vector = 8,
-                                                    .is_direct_load            = true,
-                                                    .lds_padding               = false},
-                    .block_transfer_access_order = {.order = {0, 1, 2}},
-                    .src_access_order            = {.order = {0, 1, 2}},
-                },
-            .c =
+                    int src_vector_dim            = 2;
+                    int src_scalar_per_vector     = 8;
+                    int lds_dst_scalar_per_vector = 8;
+                    bool is_direct_load           = true;
+                    bool lds_padding              = false;
+                } lds_transfer;
+                struct BlockTransferAccessOrder
                 {
-                    .thread_cluster_dims =
-                        {.m_block = 1, .m_wave_per_xdl = 32, .n_block = 1, .n_wave_per_xdl = 8},
-                    .epilogue = {.m_per_wave_per_shuffle = 1,
-                                 .n_per_wave_per_shuffle = 1,
-                                 .scalar_per_vector      = 8},
-                },
-        };
+                    std::array<size_t, 3> order{0, 1, 2};
+                } block_transfer_access_order;
+                struct SrcAccessOrder
+                {
+                    std::array<size_t, 3> order{0, 1, 2};
+                } src_access_order;
+            };
+            TransferAB a;
+            TransferAB b;
+            struct TransferC
+            {
+                struct ThreadClusterDims
+                {
+                    int m_block        = 1;
+                    int m_wave_per_xdl = 32;
+                    int n_block        = 1;
+                    int n_wave_per_xdl = 8;
+                } thread_cluster_dims;
+                struct Epilogue
+                {
+                    int m_per_wave_per_shuffle = 1;
+                    int n_per_wave_per_shuffle = 1;
+                    int scalar_per_vector      = 8;
+                } epilogue;
+            } c;
+        } transfer;
 
-        ckb::ConvFwdSpecialization fwd_specialization = ckb::ConvFwdSpecialization::DEFAULT;
-        ckb::GemmSpecialization gemm_specialization   = ckb::GemmSpecialization::Default;
-        ckb::test::BlockGemm block_gemm{.pipeline_version = ckb::PipelineVersion::V4,
-                                        .scheduler        = ckb::PipelineScheduler::INTRAWAVE};
+        // TODO: Fix CK Builder schema to not require these defaults.
+        ConvSpecial fwd_specialization  = ConvSpecial::DEFAULT;
+        GemmSpecial gemm_specialization = GemmSpecial::Default;
+        struct BlockGemm
+        {
+            PipeVers pipeline_version = PipeVers::V4;
+            PipeSched scheduler       = PipeSched::INTRAWAVE;
+        } block_gemm;
     };
+    //     // Verify that the signature conforms to the expected descriptor
+    // static_assert(ckb::ConvSignatureDescriptor<Signature>);
+    // // Specify the signature in a constexpr value
+    // constexpr Signature kSignature{};
+    // // Verify the signature value is valid
+    // static_assert(ckb::ValidConvSignature<kSignature>);
+    // Verify that the algorithm conforms to the algorithm concept
     static_assert(ckb::ConvAlgorithmDescriptor<DefaultAlgorithm>);
 
-    // Verify the algorithm satisfies the V3 concept
-    // TODO: This looks wrong users shouldn't need to do this.
-    static_assert(ckb::DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3<DefaultAlgorithm>,
-                  "Algorithm must satisfy DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3 concept");
-
-    // Create constexpr instances for use with ConvBuilder
+    // Specify the algorithm in a constexpr value
     static constexpr const DefaultAlgorithm kAlgorithm;
+
+    // TODO: Verify the algorithm value is valid.
 
     // Create a ConvBuilder instance with the signature and algorithm
     // This will instantiate the DeviceGroupedConvFwdMultipleABD_Xdl_CShuffle_V3 kernel
