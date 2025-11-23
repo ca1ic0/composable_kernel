@@ -18,10 +18,15 @@ endfunction()
 
 # The test_ckb_conv_builder target has all the unit tests (each test should run < 10 ms)
 add_ck_builder_test(test_ckb_conv_builder
+    test_bwd_weight_instance_traits.cpp
     test_conv_builder.cpp
     test_fwd_instance_traits.cpp
-    test_bwd_weight_instance_traits.cpp
-    test_instance_traits_util.cpp)
+    test_instance_traits_util.cpp
+    unit_conv_elementwise_op.cpp
+    unit_conv_tensor_layout.cpp
+    unit_conv_tensor_type.cpp
+    unit_conv_thread_block.cpp
+    unit_conv_tuning_params.cpp)
 
 add_ck_builder_test(test_ckb_inline_diff test_inline_diff.cpp)
 
