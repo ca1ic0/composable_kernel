@@ -208,8 +208,7 @@ struct HstuAttentionNoSoftmaxFwdPipelineQRKSVS
 
         __builtin_amdgcn_sched_barrier(0);
 
-        // provide partition_index for LDS read window with static_tile_distrition so that the
-        // warp_id is in vgpr
+        // provide partition_index for LDS tile window with so that warp_id is in vgpr
         array<index_t, 2> partition_index{get_warp_id<false>(), get_lane_id()};
 
         // Q tile in LDS
