@@ -5,6 +5,7 @@
 
 #include "ck/library/tensor_operation_instance/gpu/grouped_convolution_forward_convscale.hpp"
 #include "ck/library/tensor_operation_instance/gpu/grouped_convolution_forward_convinvscale.hpp"
+#include "ck/library/tensor_operation_instance/gpu/grouped_convolution_forward_convscale_relu.hpp"
 #include "ck/library/tensor_operation_instance/gpu/grouped_convolution_forward_scale.hpp"
 #include "ck/library/reference_tensor_operation/cpu/reference_conv_fwd.hpp"
 #include "ck/library/utility/device_memory.hpp"
@@ -42,7 +43,7 @@ bool profile_grouped_conv_fwd_outelementop_impl(int do_verification,
                                                 bool time_kernel,
                                                 const ck::utils::conv::ConvParam& conv_param)
 {
-    auto pass = true; // return status
+    auto pass = true;
 
     using CShuffleDataType = float;
 
