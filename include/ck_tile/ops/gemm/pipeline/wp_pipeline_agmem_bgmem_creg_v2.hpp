@@ -667,7 +667,7 @@ struct WeightPreshufflePipelineAGmemBGmemCRegV2
                 move_tile_window(b_flat_dram_windows(nIter)(kIter),
                                  {nIter * NFlatPerBlockPerIter, kIter * KFlatPerBlockPerIter});
 
-                load_int4_tile<BDataType, ADataType, UnaryOpSize_>(
+                load_and_convert_tile<BDataType, ADataType, UnaryOpSize_>(
                     b_warp_tensor_ping(nIter)(kIter), b_flat_dram_windows(nIter)(kIter));
             });
         });
@@ -715,7 +715,7 @@ struct WeightPreshufflePipelineAGmemBGmemCRegV2
                     move_tile_window(b_flat_dram_windows(nIter)(kIter),
                                      {nIter * NFlatPerBlockPerIter, kIter * KFlatPerBlockPerIter});
 
-                    load_int4_tile<BDataType, ADataType, UnaryOpSize_>(
+                    load_and_convert_tile<BDataType, ADataType, UnaryOpSize_>(
                         b_warp_tensor_pong(nIter)(kIter), b_flat_dram_windows(nIter)(kIter));
                 });
             });
@@ -792,7 +792,7 @@ struct WeightPreshufflePipelineAGmemBGmemCRegV2
                     move_tile_window(b_flat_dram_windows(nIter)(kIter),
                                      {nIter * NFlatPerBlockPerIter, kIter * KFlatPerBlockPerIter});
 
-                    load_int4_tile<BDataType, ADataType, UnaryOpSize_>(
+                    load_and_convert_tile<BDataType, ADataType, UnaryOpSize_>(
                         b_warp_tensor_ping(nIter)(kIter), b_flat_dram_windows(nIter)(kIter));
                 });
             });
@@ -873,7 +873,7 @@ struct WeightPreshufflePipelineAGmemBGmemCRegV2
                     move_tile_window(b_flat_dram_windows(nIter)(kIter),
                                      {nIter * NFlatPerBlockPerIter, kIter * KFlatPerBlockPerIter});
 
-                    load_int4_tile<BDataType, ADataType, UnaryOpSize_>(
+                    load_and_convert_tile<BDataType, ADataType, UnaryOpSize_>(
                         b_warp_tensor_pong(nIter)(kIter), b_flat_dram_windows(nIter)(kIter));
                 });
             });

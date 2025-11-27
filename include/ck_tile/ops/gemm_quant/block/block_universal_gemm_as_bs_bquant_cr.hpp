@@ -275,8 +275,10 @@ struct BQuantBlockUniversalGemmAsBsCr : public BlockGemmBQuantBase<Problem_>
         CK_TILE_DEVICE void LocalPrefetch(const ASmemBlockWindow& a_block_window,
                                           const BSmemBlockWindow& b_block_window)
         {
-            load_int4_tile<ADataType, ComputeDataType, UnaryOpSize_>(a_warp_tile_, a_block_window);
-            load_int4_tile<BDataType, ComputeDataType, UnaryOpSize_>(b_warp_tile_, b_block_window);
+            load_and_convert_tile<ADataType, ComputeDataType, UnaryOpSize_>(a_warp_tile_,
+                                                                            a_block_window);
+            load_and_convert_tile<BDataType, ComputeDataType, UnaryOpSize_>(b_warp_tile_,
+                                                                            b_block_window);
         }
 
         // C += A * B
