@@ -28,15 +28,7 @@
 #include "reference_hstu_attention.hpp"
 
 #include "hstu_attention_util.hpp"
-
-extern void hstu_attention_no_group_forward_fp16(HstuAttentionNoGroupFwdParams& param,
-                                                 hipStream_t stream);
-extern void hstu_attention_no_group_forward_bf16(HstuAttentionNoGroupFwdParams& param,
-                                                 hipStream_t stream);
-extern void hstu_attention_group_forward_fp16(HstuAttentionGroupFwdParams& param,
-                                              hipStream_t stream);
-extern void hstu_attention_group_forward_bf16(HstuAttentionGroupFwdParams& param,
-                                              hipStream_t stream);
+#include "hstu_attention_api.hpp"
 
 template <typename T>
 void dumpBufferToFile(const char* fileName, T* data, size_t dataNumItems)
