@@ -44,12 +44,12 @@ struct WarpGemmAttributeMfma
     static_assert(Impl::kAMBlock == 1 && Impl::kBNBlock == 1,
                   "Multi-block WarpGemmAttributeMfmaImpl is not supported");
 
-    template <index_t kMNLane>
+    template <index_t kMNLane, index_t NumAccess>
     static constexpr auto get_warp_dstr_encoding()
     {
-        static_assert(kKPerThread % AttrNumAccessV == 0,
+        static_assert(NumAccess != 0 && kKPerThread % NumAccess == 0,
                       "kKPerThread must be divisible by NumAccess");
-        if constexpr(AttrNumAccessV == 1)
+        if constexpr(NumAccess == 1)
             return tile_distribution_encoding<
                 sequence<>,
                 tuple<sequence<kMNLane>, sequence<Impl::kABKLane, Impl::kABKPerLane>>,
@@ -61,14 +61,30 @@ struct WarpGemmAttributeMfma
             return tile_distribution_encoding<
                 sequence<>,
                 tuple<sequence<kMNLane>,
-                      sequence<AttrNumAccessV, Impl::kABKLane, Impl::kABKPerLane / AttrNumAccessV>>,
+                      sequence<NumAccess, Impl::kABKLane, Impl::kABKPerLane / NumAccess>>,
                 tuple<sequence<2, 1>>,
                 tuple<sequence<1, 0>>,
                 sequence<2, 2>,
                 sequence<0, 2>>{};
     }
-    using AWarpDstrEncoding = decltype(get_warp_dstr_encoding<Impl::kAMLane>());
-    using BWarpDstrEncoding = decltype(get_warp_dstr_encoding<Impl::kBNLane>());
+
+    template <index_t NumAccess = AttrNumAccessV>
+    static constexpr auto get_awarp_dstr_encoding()
+    {
+        return get_warp_dstr_encoding<Impl::kAMLane, NumAccess>();
+    }
+
+    template <index_t NumAccess = AttrNumAccessV>
+    static constexpr auto get_bwarp_dstr_encoding()
+    {
+        return get_warp_dstr_encoding<Impl::kBNLane, NumAccess>();
+    }
+
+    template <index_t NumAccess = AttrNumAccessV>
+    using AWarpDstrEncoding = decltype(get_awarp_dstr_encoding<NumAccess>());
+
+    template <index_t NumAccess = AttrNumAccessV>
+    using BWarpDstrEncoding = decltype(get_bwarp_dstr_encoding<NumAccess>());
 
     using CWarpDstrEncoding = tile_distribution_encoding<
         sequence<>,
@@ -151,14 +167,14 @@ struct WarpGemmAttributeMfmaIterateK
     static_assert(Impl::kAMBlock == 1 || Impl::kBNBlock == 1,
                   "Multi-block on both M & N directions is not supported");
 
-    template <index_t kMNLane, index_t kMNBlock, index_t kNMBlock>
+    template <index_t kMNLane, index_t kMNBlock, index_t kNMBlock, index_t NumAccess = AttrNumAccessV>
     CK_TILE_DEVICE static constexpr auto get_warp_dstr_encoding()
     {
         if constexpr(kMNBlock == 1 && kNMBlock == 1)
         {
             static_assert(kKPerThread % AttrNumAccessV == 0,
                           "kKPerThread must be divisible by NumAccess");
-            if constexpr(AttrNumAccessV == 1)
+            if constexpr(NumAccess == 1)
                 return tile_distribution_encoding<
                     sequence<>,
                     tuple<sequence<kMNLane>, sequence<Impl::kABKLane, Impl::kABKPerLane * kKIter>>,
@@ -172,7 +188,7 @@ struct WarpGemmAttributeMfmaIterateK
                     tuple<sequence<kMNLane>,
                           sequence<AttrNumAccessV,
                                    Impl::kABKLane,
-                                   Impl::kABKPerLane * kKIter / AttrNumAccessV>>,
+                                   Impl::kABKPerLane * kKIter / NumAccess>>,
                     tuple<sequence<2, 1>>,
                     tuple<sequence<1, 0>>,
                     sequence<2, 2>,
@@ -180,7 +196,7 @@ struct WarpGemmAttributeMfmaIterateK
         }
         else if constexpr(kMNBlock == 1 && 1 < kNMBlock)
         {
-            static_assert(AttrNumAccessV == 1,
+            static_assert(NumAccess == 1,
                           "Multiple access is not supported when using multi-block");
             // each M/N blocks share the same data
             return tile_distribution_encoding<
@@ -193,7 +209,7 @@ struct WarpGemmAttributeMfmaIterateK
         }
         else if constexpr(1 < kMNBlock && kNMBlock == 1)
         {
-            static_assert(AttrNumAccessV == 1,
+            static_assert(NumAccess == 1,
                           "Multiple access is not supported when using multi-block");
             // single block to multi-block thread mapping
             return tile_distribution_encoding<
@@ -205,6 +221,18 @@ struct WarpGemmAttributeMfmaIterateK
                 sequence<2>,
                 sequence<1>>{};
         }
+    }
+
+    template <index_t NumAccess = AttrNumAccessV>
+    CK_TILE_DEVICE static constexpr auto get_awarp_dstr_encoding()
+    {
+        return get_warp_dstr_encoding<Impl::kAMLane, Impl::kAMBlock, Impl::kBNBlock, NumAccess>();
+    }
+
+    template <index_t NumAccess = AttrNumAccessV>
+    CK_TILE_DEVICE static constexpr auto get_bwarp_dstr_encoding()
+    {
+        return get_warp_dstr_encoding<Impl::kBNLane, Impl::kBNBlock, Impl::kAMBlock, NumAccess>();
     }
 
     CK_TILE_DEVICE static constexpr auto get_cwarp_dstr_encoding()
@@ -245,10 +273,12 @@ struct WarpGemmAttributeMfmaIterateK
         }
     }
 
-    using AWarpDstrEncoding =
-        decltype(get_warp_dstr_encoding<Impl::kAMLane, Impl::kAMBlock, Impl::kBNBlock>());
-    using BWarpDstrEncoding =
-        decltype(get_warp_dstr_encoding<Impl::kBNLane, Impl::kBNBlock, Impl::kAMBlock>());
+    template <index_t NumAccess = AttrNumAccessV>
+    using AWarpDstrEncoding = decltype(get_awarp_dstr_encoding<NumAccess>());
+
+    template <index_t NumAccess = AttrNumAccessV>
+    using BWarpDstrEncoding = decltype(get_bwarp_dstr_encoding<NumAccess>());
+
     using CWarpDstrEncoding = decltype(get_cwarp_dstr_encoding());
 
     // c_vec += a_vec * b_vec
@@ -327,10 +357,23 @@ struct WarpGemmAttributeMfmaTransposedCDistribution
     static_assert(Impl::kAMBlock == 1 && Impl::kBNBlock == 1,
                   "Multi-block WarpGemmAttributeMfmaImpl is not supported");
 
-    using AWarpDstrEncoding =
-        typename WarpGemmAttributeMfma<Impl, AttrNumAccess>::BWarpDstrEncoding;
-    using BWarpDstrEncoding =
-        typename WarpGemmAttributeMfma<Impl, AttrNumAccess>::AWarpDstrEncoding;
+    template <index_t NumAccess = AttrNumAccessV>
+    CK_TILE_DEVICE static constexpr auto get_awarp_dstr_encoding()
+    {
+        return WarpGemmAttributeMfma<Impl, AttrNumAccess>::template get_bwarp_dstr_encoding<NumAccess>();
+    }
+
+    template <index_t NumAccess = AttrNumAccessV>
+    CK_TILE_DEVICE static constexpr auto get_bwarp_dstr_encoding()
+    {
+        return WarpGemmAttributeMfma<Impl, AttrNumAccess>::template get_awarp_dstr_encoding<NumAccess>();
+    }
+
+    template <index_t NumAccess = AttrNumAccessV>
+    using AWarpDstrEncoding = decltype(get_awarp_dstr_encoding<NumAccess>());
+
+    template <index_t NumAccess = AttrNumAccessV>
+    using BWarpDstrEncoding = decltype(get_bwarp_dstr_encoding<NumAccess>());
 
     using CWarpDstrEncoding = tile_distribution_encoding<
         sequence<>,
@@ -459,8 +502,9 @@ template <typename WarpGemmAttributeMfmaImpl_,
           WGAttrNumAccessEnum AttrNumAccess_ = WGAttrNumAccessEnum::Single>
 struct WarpGemmAttributeMfmaIterateKAndTransposedCDistribution
 {
-    using Impl                          = remove_cvref_t<WarpGemmAttributeMfmaImpl_>;
-    static constexpr auto AttrNumAccess = AttrNumAccess_;
+    using Impl                           = remove_cvref_t<WarpGemmAttributeMfmaImpl_>;
+    static constexpr auto AttrNumAccess  = AttrNumAccess_;
+    static constexpr auto AttrNumAccessV = static_cast<index_t>(AttrNumAccess);
 
     // swap A and B
     using ADataType = typename Impl::BDataType;
