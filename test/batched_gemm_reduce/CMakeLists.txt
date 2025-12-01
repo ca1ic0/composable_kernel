@@ -4,4 +4,9 @@
 add_test_executable(test_batched_gemm_reduce_fp16 batched_gemm_reduce_fp16_xdl.cpp)
 if(result EQUAL 0)
   target_link_libraries(test_batched_gemm_reduce_fp16 PRIVATE utility device_batched_gemm_reduce_instance)
- endif()
+endif()
+
+add_test_executable(test_batched_gemm_reduce_fp16_wmma batched_gemm_reduce_fp16_wmma.cpp)
+if(result EQUAL 0)
+  target_link_libraries(test_batched_gemm_reduce_fp16_wmma PRIVATE utility device_batched_gemm_reduce_instance)
+endif()
