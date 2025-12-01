@@ -78,7 +78,8 @@ void add_device_batched_gemm_reduce_wmma_cshuffle_v3_f16_f16_f16_f32_f32_gmk_gkn
     std::vector<DeviceGemmReducePtr<0, ReducePtrsGlobal::Size()>>& instances)
 {
     add_device_operation_instances(
-        instances, device_batched_gemm_reduce_wmma_cshuffle_v3_f16_f16_f16_f32_f32_gmk_gkn_gmn_instances{});
+        instances,
+        device_batched_gemm_reduce_wmma_cshuffle_v3_f16_f16_f16_f32_f32_gmk_gkn_gmn_instances{});
 }
 
 } // namespace instance

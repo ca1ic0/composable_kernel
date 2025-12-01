@@ -167,7 +167,8 @@ template <typename ALayout,
           typename ComputeTypeB                       = ComputeTypeA,
           bool PermuteA                               = false,
           bool PermuteB                               = false>
-struct DeviceBatchedGemmReduce_Wmma_CShuffleV3 : public DeviceGemmReduce<0, ReduceOperations::Size()>
+struct DeviceBatchedGemmReduce_Wmma_CShuffleV3
+    : public DeviceGemmReduce<0, ReduceOperations::Size()>
 {
     using DeviceOp = DeviceBatchedGemmReduce_Wmma_CShuffleV3;
 
@@ -243,14 +244,14 @@ struct DeviceBatchedGemmReduce_Wmma_CShuffleV3 : public DeviceGemmReduce<0, Redu
                                      CReduceThreadLds2VGprCopySrcDstScalarPerVector_NPerBlock,
                                      CReduceThreadVgpr2GlobalCopySrcDstScalarPerVector_MPerBlock>;
 
-    static constexpr index_t NumReduce       = ReduceOperations::Size();
+    static constexpr index_t NumReduce = ReduceOperations::Size();
 
     struct ComputePtrOffsetOfStridedBatch
     {
         ComputePtrOffsetOfStridedBatch(long_index_t BatchStrideA,
-                                                            long_index_t BatchStrideB,
-                                                            long_index_t BatchStrideC,
-                                                            std::array<long_index_t, NumReduce> BatchStrideReduce)
+                                       long_index_t BatchStrideB,
+                                       long_index_t BatchStrideC,
+                                       std::array<long_index_t, NumReduce> BatchStrideReduce)
             : BatchStrideA_{BatchStrideA},
               BatchStrideB_{BatchStrideB},
               BatchStrideC_{BatchStrideC},
@@ -276,9 +277,8 @@ struct DeviceBatchedGemmReduce_Wmma_CShuffleV3 : public DeviceGemmReduce<0, Redu
         template <typename ReducePtrs>
         __host__ __device__ void OffsetReducePtrs(index_t g_idx, ReducePtrs& ptrs) const
         {
-            static_for<0, NumReduce, 1>{}([&](auto I) {
-                ptrs(I) = ptrs(I) + g_idx * BatchStrideReduce_[I.value];
-            });
+            static_for<0, NumReduce, 1>{}(
+                [&](auto I) { ptrs(I) = ptrs(I) + g_idx * BatchStrideReduce_[I.value]; });
         }
 
         private:
@@ -288,7 +288,7 @@ struct DeviceBatchedGemmReduce_Wmma_CShuffleV3 : public DeviceGemmReduce<0, Redu
         std::array<long_index_t, NumReduce> BatchStrideReduce_{};
     };
 
-  private:
+    private:
     static long_index_t ComputeABatchStride(index_t MRaw, index_t KRaw, index_t StrideA)
     {
         if constexpr(is_same_v<tensor_layout::gemm::RowMajor, ALayout>)
@@ -325,8 +325,7 @@ struct DeviceBatchedGemmReduce_Wmma_CShuffleV3 : public DeviceGemmReduce<0, Redu
         }
     }
 
-  public:
-
+    public:
     struct Argument : public BaseArgument
     {
         Argument(const ADataType* p_a_grid,
@@ -363,10 +362,11 @@ struct DeviceBatchedGemmReduce_Wmma_CShuffleV3 : public DeviceGemmReduce<0, Redu
               reduce_in_element_ops_{reduce_in_element_ops},
               reduce_out_element_ops_{reduce_out_element_ops},
               batch_stride_reduce_{batch_stride_reduce},
-              compute_ptr_offset_of_batch_(ComputePtrOffsetOfStridedBatch{ComputeABatchStride(MRaw, KRaw, StrideA),
-                                              ComputeBBatchStride(KRaw, NRaw, StrideB),
-                                              ComputeCBatchStride(MRaw, NRaw, StrideC),
-                                              batch_stride_reduce})
+              compute_ptr_offset_of_batch_(
+                  ComputePtrOffsetOfStridedBatch{ComputeABatchStride(MRaw, KRaw, StrideA),
+                                                 ComputeBBatchStride(KRaw, NRaw, StrideB),
+                                                 ComputeCBatchStride(MRaw, NRaw, StrideC),
+                                                 batch_stride_reduce})
         {
         }
 
@@ -592,22 +592,21 @@ struct DeviceBatchedGemmReduce_Wmma_CShuffleV3 : public DeviceGemmReduce<0, Redu
             return false;
         }
 
-        typename GridwiseGemm::Argument gemm_arg{
-            std::array<const void*, 1>{arg.p_a_grid_},
-            std::array<const void*, 1>{arg.p_b_grid_},
-            std::array<const void*, 0>{},
-            static_cast<EDataType*>(arg.p_e_grid_),
-            arg.MRaw_,
-            arg.NRaw_,
-            arg.KRaw_,
-            std::array<index_t, 1>{arg.StrideA_}, // StrideAs
-            std::array<index_t, 1>{arg.StrideB_}, // StrideBs
-            std::array<index_t, 0>{},             // StrideDs
-            arg.StrideC_,                         // StrideC
-            1,                                    // kbatch
-            arg.a_element_op_,
-            arg.b_element_op_,
-            arg.c_element_op_};
+        typename GridwiseGemm::Argument gemm_arg{std::array<const void*, 1>{arg.p_a_grid_},
+                                                 std::array<const void*, 1>{arg.p_b_grid_},
+                                                 std::array<const void*, 0>{},
+                                                 static_cast<EDataType*>(arg.p_e_grid_),
+                                                 arg.MRaw_,
+                                                 arg.NRaw_,
+                                                 arg.KRaw_,
+                                                 std::array<index_t, 1>{arg.StrideA_}, // StrideAs
+                                                 std::array<index_t, 1>{arg.StrideB_}, // StrideBs
+                                                 std::array<index_t, 0>{},             // StrideDs
+                                                 arg.StrideC_,                         // StrideC
+                                                 1,                                    // kbatch
+                                                 arg.a_element_op_,
+                                                 arg.b_element_op_,
+                                                 arg.c_element_op_};
 
         return GridwiseGemm::CheckValidity(gemm_arg);
     }
@@ -674,27 +673,26 @@ struct DeviceBatchedGemmReduce_Wmma_CShuffleV3 : public DeviceGemmReduce<0, Redu
             *(static_cast<CElementwiseOperation*>(gemm_element_ops[2]));
 
         std::array<long_index_t, NumReduce> batch_stride_reduce{};
-        static_for<0, NumReduce, 1>{}([&](auto I) {
-            batch_stride_reduce[I.value] = static_cast<long_index_t>(M);
-        });    
+        static_for<0, NumReduce, 1>{}(
+            [&](auto I) { batch_stride_reduce[I.value] = static_cast<long_index_t>(M); });
 
         return Argument{static_cast<const ADataType*>(p_a),
-                static_cast<const BDataType*>(p_b),
-                static_cast<EDataType*>(p_e),
-                reduce_tuple,
-                M,
-                N,
-                K,
-                StrideA,
-                StrideB,
-                StrideC,
-                Batch,
-                a_element_op,
-                b_element_op,
-                c_element_op,
-                reduce_in_element_ops,
-                reduce_out_element_ops,
-                batch_stride_reduce};
+                        static_cast<const BDataType*>(p_b),
+                        static_cast<EDataType*>(p_e),
+                        reduce_tuple,
+                        M,
+                        N,
+                        K,
+                        StrideA,
+                        StrideB,
+                        StrideC,
+                        Batch,
+                        a_element_op,
+                        b_element_op,
+                        c_element_op,
+                        reduce_in_element_ops,
+                        reduce_out_element_ops,
+                        batch_stride_reduce};
     }
 
     static auto MakeInvoker() { return Invoker{}; }
@@ -757,9 +755,8 @@ struct DeviceBatchedGemmReduce_Wmma_CShuffleV3 : public DeviceGemmReduce<0, Redu
             *(static_cast<CElementwiseOperation*>(gemm_element_ops[2]));
 
         std::array<long_index_t, NumReduce> batch_stride_reduce{};
-        static_for<0, NumReduce, 1>{}([&](auto I) {
-            batch_stride_reduce[I.value] = static_cast<long_index_t>(M);
-        });    
+        static_for<0, NumReduce, 1>{}(
+            [&](auto I) { batch_stride_reduce[I.value] = static_cast<long_index_t>(M); });
 
         return std::make_unique<Argument>(static_cast<const ADataType*>(p_a),
                                           static_cast<const BDataType*>(p_b),
@@ -791,16 +788,14 @@ struct DeviceBatchedGemmReduce_Wmma_CShuffleV3 : public DeviceGemmReduce<0, Redu
     {
         auto str = std::stringstream();
 
-        str << "DeviceBatchedGemmReduce_Wmma_CShuffleV3"
-            << "<" << BlockSize << ", " << MPerBlock << ", " << NPerBlock << ", " << KPerBlock
-            << ", " << AK1 << ", " << BK1 << ", " << MPerWmma << ", " << NPerWmma << ", "
-            << MRepeat << ", " << NRepeat << ", " << ABlockTransferSrcScalarPerVector << ", "
-            << BBlockTransferSrcScalarPerVector << ", " << CShuffleMRepeatPerShuffle << ", "
-            << CShuffleNRepeatPerShuffle << ">";
+        str << "DeviceBatchedGemmReduce_Wmma_CShuffleV3" << "<" << BlockSize << ", " << MPerBlock
+            << ", " << NPerBlock << ", " << KPerBlock << ", " << AK1 << ", " << BK1 << ", "
+            << MPerWmma << ", " << NPerWmma << ", " << MRepeat << ", " << NRepeat << ", "
+            << ABlockTransferSrcScalarPerVector << ", " << BBlockTransferSrcScalarPerVector << ", "
+            << CShuffleMRepeatPerShuffle << ", " << CShuffleNRepeatPerShuffle << ">";
 
         return str.str();
     }
-
 };
 
 } // namespace device
