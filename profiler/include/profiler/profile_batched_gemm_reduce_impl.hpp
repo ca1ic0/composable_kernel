@@ -17,11 +17,6 @@
 #include "ck/library/utility/literals.hpp"
 #include "ck/library/reference_tensor_operation/cpu/reference_batched_gemm.hpp"
 
-namespace ck {
-namespace tensor_operation {
-namespace device {
-namespace instance {
-
 template <typename DataType>
 inline constexpr double get_rtol()
 {
@@ -59,6 +54,11 @@ inline constexpr double get_atol()
         return 1e-3;
     }
 }
+
+namespace ck {
+namespace tensor_operation {
+namespace device {
+namespace instance {
 
 using F32                 = float;
 using F16                 = ck::half_t;
@@ -407,18 +407,18 @@ bool profile_batched_gemm_reduce_impl(int do_verification,
                 bool c_error  = ck::utils::check_err(c_g_m_n_device_result,
                                                     c_g_m_n_host_result,
                                                     "Error: Device and Host results do not match!",
-                                                    get_rtol<OutDataType>(),
-                                                    get_atol<OutDataType>());
+                                                    get_rtol<CDataType>(),
+                                                    get_atol<CDataType>());
                 bool d0_error = ck::utils::check_err(d0_g_m_device_result,
                                                      d0_g_m_host_result,
                                                      "Error: Device and Host results do not match!",
-                                                     get_rtol<OutDataType>(),
-                                                     get_atol<OutDataType>());
+                                                     get_rtol<ReduceDataType>(),
+                                                     get_atol<ReduceDataType>());
                 bool d1_error = ck::utils::check_err(d1_g_m_device_result,
                                                      d1_g_m_host_result,
                                                      "Error: Device and Host results do not match!",
-                                                     get_rtol<OutDataType>(),
-                                                     get_atol<OutDataType>());
+                                                     get_rtol<ReduceDataType>(),
+                                                     get_atol<ReduceDataType>());
 
                 pass = pass && (c_error == true);
                 pass = pass && (d0_error == true);
