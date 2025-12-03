@@ -612,7 +612,7 @@ struct HstuAttentionFwdKernel
             make_tile_window(q_dram,
                              [&]() {
                                  return make_tuple(number<HstuAttentionPipeline::kM0>{},
-                                                   number<HstuAttentionPipeline::kQKHeaddim>{});
+                                                   number<HstuAttentionPipeline::kSubQKHeaddim>{});
                              }(),
                              {i_m0, 0});
 
