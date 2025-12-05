@@ -773,25 +773,12 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                                    p, sequence<0, i_k1 * kK1>{}, sequence<kM0, (i_k1 + 1) * kK1>{}),
                                v_lds_windows[number<i_k1 % NumVLdsBuffers>{}]);
 
-                        if constexpr(std::is_same_v<VLayout,
-                                                    ck_tile::tensor_layout::gemm::RowMajor>)
-                        {
-                            auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
-                                Policy::template MakeShuffledVRegTileDistribution<Problem>());
-                            shuffle_tile(v_shuffle_tmp,
-                                         v_tiles[number<(i_k1 + 1) % NumPrefetchV>{}]);
-                            store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
-                                       tile_elementwise_in(v_element_func, v_shuffle_tmp),
-                                       partition_index);
-                        }
-                        else
-                        {
-                            store_tile(
-                                v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
-                                tile_elementwise_in(v_element_func,
-                                                    v_tiles[number<(i_k1 + 1) % NumPrefetchV>{}]),
-                                partition_index);
-                        }
+                        auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
+                            Policy::template MakeShuffledVRegTileDistribution<Problem>());
+                        shuffle_tile(v_shuffle_tmp, v_tiles[number<(i_k1 + 1) % NumPrefetchV>{}]);
+                        store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
+                                   tile_elementwise_in(v_element_func, v_shuffle_tmp),
+                                   partition_index);
 
                         if constexpr(i_k1 < k1_loops - NumPrefetchV)
                             move_tile_window(v_dram_window, {0, kK1});
