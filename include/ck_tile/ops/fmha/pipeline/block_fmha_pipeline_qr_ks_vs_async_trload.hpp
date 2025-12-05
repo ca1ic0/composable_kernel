@@ -837,17 +837,32 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
                              Policy::template MakeVLdsBlockDescriptor<Problem>().get_lengths(),
                              {0, 0}));
 
+        constexpr auto all_zeros_partition_index = make_multi_index(0, 0);
         auto v_lds_read_windows =
             make_tuple(make_tile_window(v_lds_read_views.at(I0),
                                         make_tuple(number<kN0>{}, number<kN1>{}),
                                         {0, 0},
                                         Policy::template MakeVRegTileDistribution<Problem>(),
-                                        partition_index),
+                                        all_zeros_partition_index),
                        make_tile_window(v_lds_read_views.at(I1),
                                         make_tuple(number<kN0>{}, number<kN1>{}),
                                         {0, 0},
                                         Policy::template MakeVRegTileDistribution<Problem>(),
-                                        partition_index));
+                                        all_zeros_partition_index));
+
+        const index_t lane_id = partition_index[1];
+        /// FIXME: correct the offset computation logic
+        const index_t v_lds_load_offset = [&] {
+            int group_id      = lane_id / 16;
+            int local_lane_id = lane_id % 16;
+
+            int start_row = (group_id / 2) * 4 + local_lane_id / 4;
+            int start_col = (group_id % 2 * 16) + local_lane_id % 4 * 4;
+
+            int padding = group_id / 2 * 32;
+            int offset  = start_row * 128 + start_col + padding;
+            return offset;
+        }();
 
         // We want S and P could reuse the same register buffer.
         union sp_compute_type
@@ -985,7 +1000,8 @@ struct BlockFmhaPipelineQRKSVSAsyncTrload
             async_load_tile(k_lds_write_windows.at(number<1 - acc_regidx>{}), k_dram_window);
 
             block_sync_lds_direct_load<k_vmem_insts + v_vmem_insts>();
-            kv_tile.v_tile = load_tile_transpose(v_lds_read_windows.at(number<1 - acc_regidx>{}));
+            kv_tile.v_tile = load_tile_transpose(v_lds_read_windows.at(number<1 - acc_regidx>{}),
+                                                 v_lds_load_offset);
             __builtin_amdgcn_sched_barrier(0);
 
             // ----------------------------- Gemm1@i-----------------------------------------
