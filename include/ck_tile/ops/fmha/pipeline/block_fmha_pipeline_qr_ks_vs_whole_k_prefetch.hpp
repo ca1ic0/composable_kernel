@@ -299,6 +299,9 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
 
         const auto num_total_loop = integer_divide_ceil(seqlen_k_end - seqlen_k_start, kN0);
 
+        // provide partition_index for LDS tile window so that warp_id is in vgpr
+        array<index_t, 2> partition_index{get_warp_id<false>(), get_lane_id()};
+
         // check early exit if no work to do
         if constexpr(FmhaMask::IsMasking || kPadSeqLenK)
         {
@@ -343,9 +346,9 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                     if(num_total_loop > 1) // there are multiple iterations
                     {
                         static_for<0, k0_loops - 1, 1>{}([&](auto i_k0) {
-                            store_tile(
-                                k_lds_windows[number<i_k0 % NumKLdsBuffers>{}],
-                                tile_elementwise_in(k_element_func, k_tiles[number<i_k0>{}]));
+                            store_tile(k_lds_windows[number<i_k0 % NumKLdsBuffers>{}],
+                                       tile_elementwise_in(k_element_func, k_tiles[number<i_k0>{}]),
+                                       partition_index);
 
                             k_tiles[number<i_k0 + 1>{}] = load_tile(k_dram_window);
                             if constexpr(i_k0 < k0_loops - 2)
@@ -365,7 +368,8 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
 
                         store_tile(
                             k_lds_windows[number<(k0_loops - 1) % NumKLdsBuffers>{}],
-                            tile_elementwise_in(k_element_func, k_tiles[number<k0_loops - 1>{}]));
+                            tile_elementwise_in(k_element_func, k_tiles[number<k0_loops - 1>{}]),
+                            partition_index);
 
                         // prefetch first v_tile
                         v_tiles[I0] = load_tile(v_dram_window);
@@ -394,9 +398,9 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                     else // there is only single iteration
                     {
                         static_for<0, k0_loops, 1>{}([&](auto i_k0) {
-                            store_tile(
-                                k_lds_windows[number<i_k0 % NumKLdsBuffers>{}],
-                                tile_elementwise_in(k_element_func, k_tiles[number<i_k0>{}]));
+                            store_tile(k_lds_windows[number<i_k0 % NumKLdsBuffers>{}],
+                                       tile_elementwise_in(k_element_func, k_tiles[number<i_k0>{}]),
+                                       partition_index);
 
                             if constexpr(i_k0 < k0_loops - 1)
                                 k_tiles[number<i_k0 + 1>{}] = load_tile(k_dram_window);
@@ -428,7 +432,8 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                     if(i_total_loops < num_total_loop - 1) // intermediate iteration
                     {
                         store_tile(k_lds_windows[I0],
-                                   tile_elementwise_in(k_element_func, k_tiles[I0]));
+                                   tile_elementwise_in(k_element_func, k_tiles[I0]),
+                                   partition_index);
 
                         // prefetch first v_tile
                         v_tiles[I0] = load_tile(v_dram_window);
@@ -441,7 +446,8 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                                k_lds_windows[I0]);
 
                         store_tile(k_lds_windows[I1],
-                                   tile_elementwise_in(k_element_func, k_tiles[I1]));
+                                   tile_elementwise_in(k_element_func, k_tiles[I1]),
+                                   partition_index);
 
                         move_tile_window(k_dram_window, {kN0, 0});
 
@@ -461,7 +467,8 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                         // during the gemm-loop, also prefetch other k_tiles for next iteration
                         static_for<2, k0_loops, 1>{}([&](auto i_k0) {
                             store_tile(k_lds_windows[number<i_k0 % NumKLdsBuffers>{}],
-                                       k_tiles[number<i_k0>{}]);
+                                       k_tiles[number<i_k0>{}],
+                                       partition_index);
 
                             k_tiles[number<i_k0>{}] = load_tile(k_dram_window);
                             if constexpr(i_k0 < k0_loops - 1)
@@ -480,9 +487,9 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                     else // last iteration
                     {
                         static_for<0, k0_loops, 1>{}([&](auto i_k0) {
-                            store_tile(
-                                k_lds_windows[number<i_k0 % NumKLdsBuffers>{}],
-                                tile_elementwise_in(k_element_func, k_tiles[number<i_k0>{}]));
+                            store_tile(k_lds_windows[number<i_k0 % NumKLdsBuffers>{}],
+                                       tile_elementwise_in(k_element_func, k_tiles[number<i_k0>{}]),
+                                       partition_index);
 
                             if constexpr(i_k0 == 0)
                             {
@@ -507,7 +514,8 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
             {
                 static_for<0, k0_loops, 1>{}([&](auto i_k0) {
                     store_tile(k_lds_windows[number<i_k0 % NumKLdsBuffers>{}],
-                               tile_elementwise_in(k_element_func, k_tiles[I0]));
+                               tile_elementwise_in(k_element_func, k_tiles[I0]),
+                               partition_index);
 
                     if constexpr(i_k0 == 0)
                         clear_tile(s_acc);
@@ -709,7 +717,8 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
             shuffle_tile(v_shuffle_tmp, v_tiles[I0]);
 
             store_tile(v_lds_windows[I0],
-                       tile_elementwise_in(v_element_func, v_shuffle_tmp)); // store the prefetch
+                       tile_elementwise_in(v_element_func, v_shuffle_tmp),
+                       partition_index);
 
             __builtin_amdgcn_sched_barrier(0);
 
@@ -746,7 +755,8 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                             Policy::template MakeShuffledVRegTileDistribution<Problem>());
                         shuffle_tile(v_shuffle_tmp, v_tiles[I0]);
                         store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
-                                   tile_elementwise_in(v_element_func, v_shuffle_tmp));
+                                   tile_elementwise_in(v_element_func, v_shuffle_tmp),
+                                   partition_index);
 
                         move_tile_window(v_dram_window, {0, kK1});
                     });
@@ -771,14 +781,16 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                             shuffle_tile(v_shuffle_tmp,
                                          v_tiles[number<(i_k1 + 1) % NumPrefetchV>{}]);
                             store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
-                                       tile_elementwise_in(v_element_func, v_shuffle_tmp));
+                                       tile_elementwise_in(v_element_func, v_shuffle_tmp),
+                                       partition_index);
                         }
                         else
                         {
                             store_tile(
                                 v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
                                 tile_elementwise_in(v_element_func,
-                                                    v_tiles[number<(i_k1 + 1) % NumPrefetchV>{}]));
+                                                    v_tiles[number<(i_k1 + 1) % NumPrefetchV>{}]),
+                                partition_index);
                         }
 
                         if constexpr(i_k1 < k1_loops - NumPrefetchV)
