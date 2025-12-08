@@ -221,14 +221,14 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
 
         constexpr index_t NumPrefetchK = 2;
 
-        static_assert(k1_loops >= NumPrefetchK, "Check failed!");
+        static_assert(n0_loops >= NumPrefetchK, "Check failed!");
 
         // only prefetch two k tiles to save vgprs consumption
         statically_indexed_array<k_tile_type, NumPrefetchK> k_tiles;
 
-        static_for<0, NumPrefetchK, 1>{}([&](auto i_k1) {
-            k_tiles[i_k1] = load_tile(k_dram_window);
-            move_tile_window(k_dram_window, {kK1, 0});
+        static_for<0, NumPrefetchK, 1>{}([&](auto i_n0) {
+            k_tiles[i_n0] = load_tile(k_dram_window);
+            move_tile_window(k_dram_window, {kN0Sub, 0});
         });
 
         __builtin_amdgcn_sched_barrier(0);
@@ -406,7 +406,7 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
                 if constexpr(i_n0 < n0_loops - NumPrefetchK)
                 {
                     k_tiles[number<i_n0 % NumPrefetchK>{}] = load_tile(k_dram_window);
-                    move_tile_window(k_dram_window, {kK1, 0});
+                    move_tile_window(k_dram_window, {kN0Sub, 0});
                 }
                 else
                 {
@@ -432,8 +432,8 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
 
                 set_slice_tile(pcomp_tile,
                                tmp_tile,
-                               sequence<0, i_n0 * kK1>{},
-                               sequence<kM0, (i_n0 + 1) * kK1>{});
+                               sequence<0, i_n0 * kN0Sub>{},
+                               sequence<kM0, (i_n0 + 1) * kN0Sub>{});
             });
 
             // STAGE 2, scale_s, add bias, mask, siLU
@@ -505,7 +505,7 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
 
             // check whether first V-LdsBufer overlap with last K-LdsBuffer,
             // this does not occur when k1_loops == 2 and NumKVLdsBuffers == 4
-            if constexpr((k1_loops - 1) % NumKVLdsBuffers == 2 % NumKVLdsBuffers)
+            if constexpr((n0_loops - 1) % NumKVLdsBuffers == 2 % NumKVLdsBuffers)
             {
                 __builtin_amdgcn_s_barrier();
             };
@@ -515,7 +515,7 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
 
             __builtin_amdgcn_sched_barrier(0x00000001);
 
-            static_for<min(NumPrefetchK, k1_loops), k1_loops, 1>{}([&](auto i_k1) {
+            static_for<NumPrefetchK, k1_loops, 1>{}([&](auto i_k1) {
                 // load v_tiles used in current iteration
                 v_tiles[i_k1] = load_tile(v_dram_window);
                 move_tile_window(v_dram_window, {0, kK1});
@@ -593,6 +593,13 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
             // k1_loops >= 2 required
             shuffle_tile(v_shuffled_tile, v_tiles[number<1>{}]);
 
+            // check whether first V-LdsBufer overlap with last K-LdsBuffer,
+            // this does not occur when k1_loops == 2 and NumKVLdsBuffers == 4
+            if constexpr((n0_loops - 1) % NumKVLdsBuffers == 3 % NumKVLdsBuffers)
+            {
+                __builtin_amdgcn_s_barrier();
+            };
+
             store_tile(
                 v_lds_windows[number<3 % NumKVLdsBuffers>{}], v_shuffled_tile, partition_index);
 
@@ -604,7 +611,7 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
                 {
                     // load k_tiles used by next iteration
                     k_tiles[i_k1] = load_tile(k_dram_window);
-                    move_tile_window(k_dram_window, {kK1, 0});
+                    move_tile_window(k_dram_window, {kN0Sub, 0});
                 };
 
                 __builtin_amdgcn_sched_barrier(0x00000001);

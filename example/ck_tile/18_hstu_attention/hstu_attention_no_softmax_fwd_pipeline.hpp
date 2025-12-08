@@ -401,8 +401,8 @@ struct HstuAttentionNoSoftmaxFwdPipelineQRKSVS
 
                 set_slice_tile(pcomp_tile,
                                tmp_tile,
-                               sequence<0, i_n0 * kK1>{},
-                               sequence<kM0, (i_n0 + 1) * kK1>{});
+                               sequence<0, i_n0 * kN0Sub>{},
+                               sequence<kM0, (i_n0 + 1) * kN0Sub>{});
             });
 
             __builtin_amdgcn_sched_barrier(0x00000001);
@@ -458,7 +458,7 @@ struct HstuAttentionNoSoftmaxFwdPipelineQRKSVS
 
             // check whether first V-LdsBufer overlap with last K-LdsBuffer,
             // this does not occur when k1_loops == 2 and NumKVLdsBuffers == 4
-            if constexpr((k1_loops - 1) % NumKVLdsBuffers == 2 % NumKVLdsBuffers)
+            if constexpr((n0_loops - 1) % NumKVLdsBuffers == 2 % NumKVLdsBuffers)
             {
                 __builtin_amdgcn_s_barrier();
             };
@@ -490,7 +490,7 @@ struct HstuAttentionNoSoftmaxFwdPipelineQRKSVS
             static_for<0, k1_loops, 1>{}([&](auto i_k1) {
                 // load k_tiles used by next iteration
                 k_tiles[i_k1] = load_tile(k_dram_window);
-                move_tile_window(k_dram_window, {kK1, 0});
+                move_tile_window(k_dram_window, {kN0Sub, 0});
 
                 __builtin_amdgcn_sched_barrier(0x00000001);
 
