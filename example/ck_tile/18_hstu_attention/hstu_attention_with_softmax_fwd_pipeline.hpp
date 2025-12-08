@@ -31,6 +31,7 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
 
     static constexpr index_t kM0           = HstuAttentionTileSetting::kM0;
     static constexpr index_t kN0           = HstuAttentionTileSetting::kN0;
+    static constexpr index_t kN0Sub        = HstuAttentionTileSetting::kN0Sub;
     static constexpr index_t kN1           = HstuAttentionTileSetting::kN1;
     static constexpr index_t kK1           = HstuAttentionTileSetting::kK1;
     static constexpr index_t kQKHeaddim    = HstuAttentionTileSetting::kQKHeaddim;
@@ -157,8 +158,10 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
                           kN0 == BiasDramBlockWindowTmp{}.get_window_lengths()[number<1>{}],
                       "wrong!");
 
+        constexpr index_t n0_loops = kN0 / kN0Sub;
         constexpr index_t k1_loops = kN0 / kK1;
 
+        static_assert(n0_loops >= k1_loops, "n0_loops >= k1_loops required by this pipeline");
         static_assert(k1_loops >= 2,
                       "k1_loops >= 2 required due to pre-storing two v_tiles to Lds");
 
@@ -393,23 +396,27 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
         do
         {
             // STAGE 1, Gemm_0 ( S = Q@K )
-            static_for<0, k1_loops, 1>{}([&](auto i_k1) {
-                store_tile(k_lds_write_windows[number<i_k1 % NumKVLdsBuffers>{}],
-                           k_tiles[number<i_k1 % NumPrefetchK>{}],
+            static_for<0, n0_loops, 1>{}([&](auto i_n0) {
+                store_tile(k_lds_write_windows[number<i_n0 % NumKVLdsBuffers>{}],
+                           k_tiles[number<i_n0 % NumPrefetchK>{}],
                            partition_index);
 
                 __builtin_amdgcn_sched_barrier(0x00000001);
 
-                if constexpr(i_k1 < k1_loops - NumPrefetchK)
+                if constexpr(i_n0 < n0_loops - NumPrefetchK)
                 {
-                    k_tiles[number<i_k1 % NumPrefetchK>{}] = load_tile(k_dram_window);
+                    k_tiles[number<i_n0 % NumPrefetchK>{}] = load_tile(k_dram_window);
                     move_tile_window(k_dram_window, {kK1, 0});
                 }
                 else
                 {
-                    // load v_tiles used in current iteration
-                    v_tiles[number<i_k1 - (k1_loops - NumPrefetchK)>{}] = load_tile(v_dram_window);
-                    move_tile_window(v_dram_window, {0, kK1});
+                    if constexpr(i_n0 - (n0_loops - NumPrefetchK) < k1_loops)
+                    {
+                        // load v_tiles used in current iteration
+                        v_tiles[number<i_n0 - (n0_loops - NumPrefetchK)>{}] =
+                            load_tile(v_dram_window);
+                        move_tile_window(v_dram_window, {0, kK1});
+                    }
                 };
 
                 __builtin_amdgcn_sched_barrier(0x00000001);
@@ -417,7 +424,7 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
                 block_sync_lds();
 
                 // execute current unroll of gemm_0
-                gemm_0(sacc_tile, q_tile, k_lds_read_windows[number<i_k1 % NumKVLdsBuffers>{}]);
+                gemm_0(sacc_tile, q_tile, k_lds_read_windows[number<i_n0 % NumKVLdsBuffers>{}]);
 
                 sacc_tile = tile_elementwise_in(s_acc_element_func, sacc_tile);
 
@@ -425,8 +432,8 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
 
                 set_slice_tile(pcomp_tile,
                                tmp_tile,
-                               sequence<0, i_k1 * kK1>{},
-                               sequence<kM0, (i_k1 + 1) * kK1>{});
+                               sequence<0, i_n0 * kK1>{},
+                               sequence<kM0, (i_n0 + 1) * kK1>{});
             });
 
             // STAGE 2, scale_s, add bias, mask, siLU
@@ -508,7 +515,7 @@ struct HstuAttentionWithSoftmaxFwdPipelineQRKSVS
 
             __builtin_amdgcn_sched_barrier(0x00000001);
 
-            static_for<NumPrefetchK, k1_loops, 1>{}([&](auto i_k1) {
+            static_for<min(NumPrefetchK, k1_loops), k1_loops, 1>{}([&](auto i_k1) {
                 // load v_tiles used in current iteration
                 v_tiles[i_k1] = load_tile(v_dram_window);
                 move_tile_window(v_dram_window, {0, kK1});
