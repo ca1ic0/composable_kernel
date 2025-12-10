@@ -68,11 +68,23 @@ class ThreadScheduler:
             self.workers.append(target.start_time)
             return len(self.workers) - 1
         else:
-            # New algorithm
+            # New algorithm: find the thread that finished most recently before this task started
+            # This shows dependency chains more clearly
+            best_thread = -1
+            best_end_time = -1
+
             for i, worker_end_time in enumerate(self.workers):
                 if worker_end_time <= target.start_time:
-                    self.workers[i] = target.end_time
-                    return i
+                    # This thread is available
+                    if worker_end_time > best_end_time:
+                        # This thread finished more recently than our current best
+                        best_thread = i
+                        best_end_time = worker_end_time
+
+            if best_thread >= 0:
+                # Found an available thread - use the one that finished most recently
+                self.workers[best_thread] = target.end_time
+                return best_thread
 
             # No available worker, create a new one
             self.workers.append(target.end_time)
@@ -154,7 +166,7 @@ class NinjaLogParser:
                 print(f"Warning: Error parsing line {line_num}: {e}", file=sys.stderr)
                 continue
 
-        return sorted(targets.values(), key=lambda t: t.end_time, reverse=True)
+        return list(targets.values())
 
 
 class FTimeTraceReader:
@@ -273,10 +285,31 @@ class ChromeTraceGenerator:
         """Generate Chrome trace events from build targets."""
         events = []
 
-        for target in targets:
+        # Sort targets by start time for proper thread allocation
+        sorted_targets = sorted(targets, key=lambda t: t.start_time)
+
+        # First pass: allocate threads and collect events with original thread IDs
+        thread_end_times = {}  # Maps original thread_id to its final end time
+        thread_first_gap = {}  # Maps original thread_id to when it first became idle
+        thread_events = {}  # Maps original thread_id to list of (start, end) tuples
+
+        for target in sorted_targets:
             thread_id = self.scheduler.allocate_thread(target)
 
-            # Add main ninja build event
+            # Track events on each thread
+            if thread_id not in thread_events:
+                thread_events[thread_id] = []
+            thread_events[thread_id].append((target.start_time, target.end_time))
+
+            # Track the final end time for each thread
+            if thread_id not in thread_end_times:
+                thread_end_times[thread_id] = target.end_time
+            else:
+                thread_end_times[thread_id] = max(
+                    thread_end_times[thread_id], target.end_time
+                )
+
+            # Store event with original thread_id (will remap later)
             if self.legacy_format:
                 # Legacy format: join multiple targets with commas, use "targets" category, empty args
                 target_name = (
@@ -322,6 +355,118 @@ class ChromeTraceGenerator:
                         f"Embedded {len(ftime_events)} -ftime-trace events for {target.output_name}",
                         file=sys.stderr,
                     )
+
+        # Calculate first significant gap for each thread and total process time
+        total_process_time = 0
+        thread_process_times = {}  # Track process time per thread for load balance
+
+        for thread_id, event_list in thread_events.items():
+            # Sort events by start time
+            sorted_events = sorted(event_list, key=lambda e: e[0])
+
+            # Calculate total process time for this thread
+            thread_time = 0
+            for start, end in sorted_events:
+                duration = end - start
+                total_process_time += duration
+                thread_time += duration
+            thread_process_times[thread_id] = thread_time
+
+            # Find the first significant gap (> 1ms) or use final end time
+            first_gap_time = thread_end_times[thread_id]
+            for i in range(len(sorted_events) - 1):
+                current_end = sorted_events[i][1]
+                next_start = sorted_events[i + 1][0]
+                gap = next_start - current_end
+
+                if gap > 1:  # Gap larger than 1ms
+                    first_gap_time = current_end
+                    break
+
+            thread_first_gap[thread_id] = first_gap_time
+
+        # Calculate load balance statistics
+        num_threads = len(thread_events)
+        total_targets = len(sorted_targets)
+
+        if num_threads > 0:
+            avg_process_time = total_process_time / num_threads
+            process_times = list(thread_process_times.values())
+
+            # Filter out threads with minimal work (< 1% of average) for load balance calculation
+            # These are likely just stragglers or dependency artifacts
+            threshold = avg_process_time * 0.01
+            significant_times = [t for t in process_times if t >= threshold]
+            num_significant_threads = len(significant_times)
+            num_trivial_threads = num_threads - num_significant_threads
+
+            if significant_times:
+                min_significant_time = min(significant_times)
+                max_significant_time = max(significant_times)
+                load_balance = (
+                    min_significant_time / max_significant_time
+                    if max_significant_time > 0
+                    else 0
+                )
+
+                # Standard deviation of significant thread times
+                avg_significant_time = sum(significant_times) / len(significant_times)
+                variance = sum(
+                    (t - avg_significant_time) ** 2 for t in significant_times
+                ) / len(significant_times)
+                std_dev = variance**0.5
+            else:
+                min_significant_time = 0
+                max_significant_time = 0
+                load_balance = 0
+                std_dev = 0
+        else:
+            avg_process_time = 0
+            min_significant_time = 0
+            max_significant_time = 0
+            num_significant_threads = 0
+            num_trivial_threads = 0
+            load_balance = 0
+            std_dev = 0
+
+        # Report thread statistics
+        print("\nThread Statistics:", file=sys.stderr)
+        print(f"  Total build items: {total_targets}", file=sys.stderr)
+        print(f"  Total threads used: {num_threads}", file=sys.stderr)
+        if num_trivial_threads > 0:
+            print(
+                f"    Significant threads: {num_significant_threads} (excluding {num_trivial_threads} trivial)",
+                file=sys.stderr,
+            )
+        print(
+            f"  Total process time: {total_process_time / 1000:.2f}s ({total_process_time}ms)",
+            file=sys.stderr,
+        )
+        print(
+            f"  Average process time per thread: {avg_process_time / 1000:.2f}s",
+            file=sys.stderr,
+        )
+        print(f"  Min thread time: {min_significant_time / 1000:.2f}s", file=sys.stderr)
+        print(f"  Max thread time: {max_significant_time / 1000:.2f}s", file=sys.stderr)
+        print(
+            f"  Load balance (min/max): {load_balance:.3f} ({load_balance * 100:.1f}%)",
+            file=sys.stderr,
+        )
+        print(f"  Std deviation: {std_dev / 1000:.2f}s", file=sys.stderr)
+
+        # Second pass: create thread ID mapping
+        # Sort threads by first gap time (descending) so thread that finished primary work last gets tid=0
+        sorted_thread_ids = sorted(
+            thread_first_gap.keys(), key=lambda tid: thread_first_gap[tid], reverse=True
+        )
+        thread_id_map = {
+            old_tid: new_tid for new_tid, old_tid in enumerate(sorted_thread_ids)
+        }
+
+        # Remap all thread IDs in events
+        for event in events:
+            if "tid" in event:
+                event["tid"] = thread_id_map[event["tid"]]
 
         return events
 
