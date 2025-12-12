@@ -14,17 +14,17 @@ struct HstuAttentionNoSoftmaxFwdBlockTile;
 // Tile-sizes: M N0 N1 K1 MaxK (MaxK % N1 == 0, N0 % K1 == 0)
 //
 template <>
-struct HstuAttentionNoSoftmaxFwdBlockTile<32>
-{
-    using type        = ck_tile::sequence<64, 64, 32, 32, 32, 32>;
-    using gemm0_warps = ck_tile::sequence<2, 1, 1>;
-    using gemm1_warps = ck_tile::sequence<2, 1, 1>;
-};
-
-template <>
 struct HstuAttentionNoSoftmaxFwdBlockTile<64>
 {
     using type        = ck_tile::sequence<128, 64, 32, 64, 32, 64>;
+    using gemm0_warps = ck_tile::sequence<4, 1, 1>;
+    using gemm1_warps = ck_tile::sequence<4, 1, 1>;
+};
+
+template <>
+struct HstuAttentionNoSoftmaxFwdBlockTile<96>
+{
+    using type        = ck_tile::sequence<128, 64, 32, 128, 32, 96>;
     using gemm0_warps = ck_tile::sequence<4, 1, 1>;
     using gemm1_warps = ck_tile::sequence<4, 1, 1>;
 };
@@ -51,17 +51,17 @@ struct HstuAttentionWithSoftmaxFwdBlockTile;
 // Tile-sizes: M N0 N1 K1 MaxK (MaxK % N1 == 0, N0 % K1 == 0)
 //
 template <>
-struct HstuAttentionWithSoftmaxFwdBlockTile<32>
-{
-    using type        = ck_tile::sequence<64, 64, 32, 32, 32, 32>;
-    using gemm0_warps = ck_tile::sequence<2, 1, 1>;
-    using gemm1_warps = ck_tile::sequence<2, 1, 1>;
-};
-
-template <>
 struct HstuAttentionWithSoftmaxFwdBlockTile<64>
 {
     using type        = ck_tile::sequence<128, 64, 32, 64, 32, 64>;
+    using gemm0_warps = ck_tile::sequence<4, 1, 1>;
+    using gemm1_warps = ck_tile::sequence<4, 1, 1>;
+};
+
+template <>
+struct HstuAttentionWithSoftmaxFwdBlockTile<96>
+{
+    using type        = ck_tile::sequence<128, 64, 32, 128, 32, 96>;
     using gemm0_warps = ck_tile::sequence<4, 1, 1>;
     using gemm1_warps = ck_tile::sequence<4, 1, 1>;
 };
@@ -89,17 +89,6 @@ template <ck_tile::index_t MaxK>
 struct HstuAttentionNoSoftmaxFwdTileSetting;
 
 template <>
-struct HstuAttentionNoSoftmaxFwdTileSetting<32>
-{
-    using Type = ck_tile::HstuAttentionFwdTileSettingClass<
-        typename HstuAttentionNoSoftmaxFwdBlockTile<32>::type,
-        typename HstuAttentionNoSoftmaxFwdBlockTile<32>::gemm0_warps,
-        HstuAttentionFwdWarpTile1,
-        typename HstuAttentionNoSoftmaxFwdBlockTile<32>::gemm1_warps,
-        HstuAttentionFwdWarpTile1>;
-};
-
-template <>
 struct HstuAttentionNoSoftmaxFwdTileSetting<64>
 {
     using Type = ck_tile::HstuAttentionFwdTileSettingClass<
@@ -107,6 +96,17 @@ struct HstuAttentionNoSoftmaxFwdTileSetting<64>
         typename HstuAttentionNoSoftmaxFwdBlockTile<64>::gemm0_warps,
         HstuAttentionFwdWarpTile1,
         typename HstuAttentionNoSoftmaxFwdBlockTile<64>::gemm1_warps,
+        HstuAttentionFwdWarpTile1>;
+};
+
+template <>
+struct HstuAttentionNoSoftmaxFwdTileSetting<96>
+{
+    using Type = ck_tile::HstuAttentionFwdTileSettingClass<
+        typename HstuAttentionNoSoftmaxFwdBlockTile<96>::type,
+        typename HstuAttentionNoSoftmaxFwdBlockTile<96>::gemm0_warps,
+        HstuAttentionFwdWarpTile1,
+        typename HstuAttentionNoSoftmaxFwdBlockTile<96>::gemm1_warps,
         HstuAttentionFwdWarpTile1>;
 };
 
@@ -136,17 +136,6 @@ template <ck_tile::index_t MaxK>
 struct HstuAttentionWithSoftmaxFwdTileSetting;
 
 template <>
-struct HstuAttentionWithSoftmaxFwdTileSetting<32>
-{
-    using Type = ck_tile::HstuAttentionFwdTileSettingClass<
-        typename HstuAttentionWithSoftmaxFwdBlockTile<32>::type,
-        typename HstuAttentionWithSoftmaxFwdBlockTile<32>::gemm0_warps,
-        HstuAttentionFwdWarpTile1,
-        typename HstuAttentionWithSoftmaxFwdBlockTile<32>::gemm1_warps,
-        HstuAttentionFwdWarpTile1>;
-};
-
-template <>
 struct HstuAttentionWithSoftmaxFwdTileSetting<64>
 {
     using Type = ck_tile::HstuAttentionFwdTileSettingClass<
@@ -154,6 +143,17 @@ struct HstuAttentionWithSoftmaxFwdTileSetting<64>
         typename HstuAttentionWithSoftmaxFwdBlockTile<64>::gemm0_warps,
         HstuAttentionFwdWarpTile2,
         typename HstuAttentionWithSoftmaxFwdBlockTile<64>::gemm1_warps,
+        HstuAttentionFwdWarpTile2>;
+};
+
+template <>
+struct HstuAttentionWithSoftmaxFwdTileSetting<96>
+{
+    using Type = ck_tile::HstuAttentionFwdTileSettingClass<
+        typename HstuAttentionWithSoftmaxFwdBlockTile<96>::type,
+        typename HstuAttentionWithSoftmaxFwdBlockTile<96>::gemm0_warps,
+        HstuAttentionFwdWarpTile2,
+        typename HstuAttentionWithSoftmaxFwdBlockTile<96>::gemm1_warps,
         HstuAttentionFwdWarpTile2>;
 };
 
