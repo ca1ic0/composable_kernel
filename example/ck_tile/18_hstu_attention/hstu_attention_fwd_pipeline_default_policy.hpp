@@ -333,6 +333,12 @@ struct HstuAttentionFwdPipelineQRKSVSDefaultPolicy
         {
             static_assert(kKVector == kKPack);
 
+            constexpr index_t KSingleSmemElementSpaceSize = kNPerBlock * kKPerBlock;
+
+            static_assert(KSingleSmemElementSpaceSize == GetKSingleSmemElementSpaceSize<Problem>());
+
+            constexpr index_t SingleSmemElementSpaceSize = GetSingleSmemElementSpaceSize<Problem>();
+
             using KDataType = remove_cvref_t<typename Problem::QKVDataType>;
 
             constexpr index_t DataTypeSize = sizeof(KDataType);
@@ -346,7 +352,7 @@ struct HstuAttentionFwdPipelineQRKSVSDefaultPolicy
                                                         number<kNPerBlock / NLdsLayer>{},
                                                         number<kKPerBlock / kKPack * NLdsLayer>{},
                                                         number<kKPack>{}),
-                                             make_tuple(number<kKPerBlock * kNPerBlock>{},
+                                             make_tuple(number<SingleSmemElementSpaceSize>{},
                                                         number<kKPerBlock * NLdsLayer>{},
                                                         number<kKPack>{},
                                                         number<1>{}),
