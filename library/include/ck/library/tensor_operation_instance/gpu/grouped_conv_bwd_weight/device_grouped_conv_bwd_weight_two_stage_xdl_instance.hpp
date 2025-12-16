@@ -433,7 +433,7 @@ using device_grouped_conv_bwd_weight_two_stage_nhwgc_xdl_c_shuffle_f32_merge_ins
 
         DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle< NDimSpatial,  ALayout,   BLayout,   ELayout,    F32,     F32,     F32,     F32, PassThrough, PassThrough, PassThrough,       ConvSpec,    64,    16,    64,    32,   8,   16,   16,    1,    4,     S<4, 4,  1>,       S<2, 0, 1>,     S<2, 0, 1>,              1,              2,              2,         0,    S<4, 16,  1>,     S<2, 0, 1>,     S<2, 0, 1>,             1,              2,              2,         0,           1,           1,    S<1, 8, 1, 8>,               1, Scheduler, PipelineVersion,         2,     F32,     F32,               2,               1>,
         DeviceGroupedConvBwdWeightTwoStage_Xdl_CShuffle< NDimSpatial,  ALayout,   BLayout,   ELayout,    F32,     F32,     F32,     F32, PassThrough, PassThrough, PassThrough,       ConvSpec,    64,    16,   128,    32,   8,   16,   16,    1,    8,     S<4, 4,  1>,       S<2, 0, 1>,     S<2, 0, 1>,              1,              4,              4,         0,    S<4, 16,  1>,     S<2, 0, 1>,     S<2, 0, 1>,             1,              4,              4,         0,           1,           1,    S<1, 8, 1, 8>,               1, Scheduler, PipelineVersion,         4,     F32,     F32,               4,               1>
-        // clang-format on
+    // clang-format on
     >;
 
 } // namespace instance

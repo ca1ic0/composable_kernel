@@ -422,7 +422,8 @@ struct DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1
                                                   true, /*SplitConvN*/
                                                   ABDataType,
                                                   DDataType,
-                                                  NumGroupsToMerge, /*index_t NumGroupsToMerge = 1,*/
+                                                  NumGroupsToMerge, /*index_t NumGroupsToMerge =
+                                                                       1,*/
                                                   index_t, /* typename IndexType       =  */
                                                   CTranspose>;
                 return ConvToGemmBwdDataTransformD{}.MakeCDescriptor_M_N();

@@ -586,7 +586,7 @@ using device_grouped_conv_bwd_data_xdl_f32_merged_groups_instances = std::tuple<
 
         DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1< NDimSpatial, ALayout, BLayout, DsLayout, ELayout,   F32,   F32,     F32,      F32, Empty_Tuple,   F32,  PassThrough,  PassThrough,    PassThrough,            ConvSpec,  true,  true,             1,   128,    64,    32,    32,   8,   8,   32,   32,       1,       1,      S<4, 32,  1>,     S<2, 0, 1>,     S<2, 0, 1>,              2,              1,              2,         1,       S<4, 32, 1>,     S<2, 0, 1>,     S<2, 0, 1>,              1,              1,              2,         1,            1,            1,      S<1, 8, 1, 8>,                1, LoopScheduler::Default,      F32,      F32,                2,                 1,         8>,
         DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1< NDimSpatial, ALayout, BLayout, DsLayout, ELayout,   F32,   F32,     F32,      F32, Empty_Tuple,   F32,  PassThrough,  PassThrough,    PassThrough,            ConvSpec,  true,  true,             1,   128,    64,    32,    32,   8,   8,   32,   32,       1,       1,      S<4, 32,  1>,     S<2, 0, 1>,     S<2, 0, 1>,              2,              1,              2,         1,       S<4, 32, 1>,     S<2, 0, 1>,     S<2, 0, 1>,              1,              1,              2,         1,            1,            1,      S<1, 8, 1, 8>,                1, LoopScheduler::Default,      F32,      F32,                1,                 2,         8>
-        // clang-format on
+    // clang-format on
     >;
 
 template <index_t NDimSpatial,
@@ -595,8 +595,7 @@ template <index_t NDimSpatial,
           typename DsLayout,
           typename ELayout,
           ConvolutionBackwardDataSpecialization ConvSpec>
-using device_grouped_conv_bwd_data_xdl_f16_merged_groups_instances =
-    std::tuple<
+using device_grouped_conv_bwd_data_xdl_f16_merged_groups_instances = std::tuple<
     // clang-format off
         // ##############################################|       NDim| ALayout| BLayout|    DsLayout| ELayout| AData| BData| AccData| CShuffle|      DsData| EData| AElementwise| BElementwise| CDEElementwise| ConvolutionBackward| DoPad| DoPad|      NumGemmK| Block|  MPer|  NPer|  KPer| AK1| BK1| MPer| NPer|    MXdl|    NXdl|    ABlockTransfer| ABlockTransfer| ABlockTransfer| ABlockTransfer| ABlockTransfer| ABlockTransfer| ABlockLds|    BBlockTransfer| BBlockTransfer| BBlockTransfer| BBlockTransfer| BBlockTransfer| BBlockTransfer| BBlockLds| CShuffleMXdl| CShuffleNXdl|   CDEBlockTransfer| CDEBlockTransfer|                 LoopScheduler| ACompute| BCompute|     MaxTranspose|      MaxTranspose| NumGroups|
         // ##############################################|    Spatial|        |        |            |        |  Type|  Type|    Type| DataType|        Type|  Type|    Operation|    Operation|      Operation|  DataSpecialization| GemmM| GemmN| PrefetchStage|  Size| Block| Block| Block|    |    |  XDL|  XDL| PerWave| PerWave|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraM|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraN|      PerWave|      PerWave|  _MBlock_MPerBlock|  ScalarPerVector|                              |     Type|     Type| TransferInScalar| TransferOutScalar|   ToMerge|
@@ -617,8 +616,8 @@ using device_grouped_conv_bwd_data_xdl_f16_merged_groups_instances =
 
         DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1< NDimSpatial, ALayout, BLayout,    DsLayout, ELayout,   F16,   F16,     F32,      F32, Empty_Tuple,   F16,  PassThrough,  PassThrough,    PassThrough,            ConvSpec,  true,  true,             1,   128,    32,   128,    32,   8,   8,   32,   32,       1,       2,       S<4, 8,  1>,     S<2, 0, 1>,     S<2, 0, 1>,              2,              1,              2,         1,     S<4, 16,  1>,     S<2, 0, 1>,     S<2, 0, 1>,              1,              1,              2,         1,            1,           1,       S<1, 4, 1, 8>,                 1, make_default_loop_scheduler(),     F16,      F16,                1,                 1,         2>,
         DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1< NDimSpatial, ALayout, BLayout,    DsLayout, ELayout,   F16,   F16,     F32,      F32, Empty_Tuple,   F16,  PassThrough,  PassThrough,    PassThrough,            ConvSpec,  true,  true,             1,   256,    32,   128,    32,   8,   8,   32,   32,       1,       1,       S<4, 8,  1>,     S<2, 0, 1>,     S<2, 0, 1>,              2,              1,              2,         1,     S<4, 16,  1>,     S<2, 0, 1>,     S<2, 0, 1>,              1,              1,              2,         1,            1,           1,       S<1, 4, 1, 8>,                 1, make_default_loop_scheduler(),     F16,      F16,                1,                 1,         2>
-        // clang-format on
-        >;
+    // clang-format on
+    >;
 
 template <index_t NDimSpatial,
           typename ALayout,
@@ -626,8 +625,7 @@ template <index_t NDimSpatial,
           typename DsLayout,
           typename ELayout,
           ConvolutionBackwardDataSpecialization ConvSpec>
-using device_grouped_conv_bwd_data_xdl_bf16_merged_groups_instances =
-    std::tuple<
+using device_grouped_conv_bwd_data_xdl_bf16_merged_groups_instances = std::tuple<
     // clang-format off
         // ##############################################|       NDim| ALayout| BLayout|    DsLayout| ELayout|  AData|  BData| AccData| CShuffle|      DsData|  EData| AElementwise| BElementwise| CDEElementwise| ConvolutionBackward| DoPad| DoPad|      NumGemmK| Block|  MPer|  NPer|  KPer| AK1| BK1| MPer| NPer|    MXdl|    NXdl|    ABlockTransfer| ABlockTransfer| ABlockTransfer| ABlockTransfer| ABlockTransfer| ABlockTransfer| ABlockLds|    BBlockTransfer| BBlockTransfer| BBlockTransfer| BBlockTransfer| BBlockTransfer| BBlockTransfer| BBlockLds| CShuffleMXdl| CShuffleNXdl|   CDEBlockTransfer| CDEBlockTransfer|                 LoopScheduler| ACompute| BCompute|     MaxTranspose|      MaxTranspose| NumGroups|
         // ##############################################|    Spatial|        |        |            |        |   Type|   Type|    Type| DataType|        Type|   Type|    Operation|    Operation|      Operation|  DataSpecialization| GemmM| GemmN| PrefetchStage|  Size| Block| Block| Block|    |    |  XDL|  XDL| PerWave| PerWave|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraM|     ThreadCluster|  ThreadCluster| SrcAccessOrder|   SrcVectorDim|      SrcScalar|      DstScalar|    ExtraN|      PerWave|      PerWave|  _MBlock_MPerBlock|  ScalarPerVector|                              |     Type|     Type| TransferInScalar| TransferOutScalar|   ToMerge|
@@ -648,8 +646,8 @@ using device_grouped_conv_bwd_data_xdl_bf16_merged_groups_instances =
 
         DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1< NDimSpatial, ALayout, BLayout,    DsLayout, ELayout,   BF16,   BF16,     F32,      F32, Empty_Tuple,   BF16,  PassThrough,  PassThrough,    PassThrough,            ConvSpec,  true,  true,             1,   128,    32,   128,    32,   8,   8,   32,   32,       1,       2,       S<4, 8,  1>,     S<2, 0, 1>,     S<2, 0, 1>,              2,              1,              2,         1,     S<4, 16,  1>,     S<2, 0, 1>,     S<2, 0, 1>,              1,              1,              2,         1,            1,           1,       S<1, 4, 1, 8>,                 1, make_default_loop_scheduler(),    BF16,     BF16,                1,                 1,         2>,
         DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1< NDimSpatial, ALayout, BLayout,    DsLayout, ELayout,   BF16,   BF16,     F32,      F32, Empty_Tuple,   BF16,  PassThrough,  PassThrough,    PassThrough,            ConvSpec,  true,  true,             1,   256,    32,   128,    32,   8,   8,   32,   32,       1,       1,       S<4, 8,  1>,     S<2, 0, 1>,     S<2, 0, 1>,              2,              1,              2,         1,     S<4, 16,  1>,     S<2, 0, 1>,     S<2, 0, 1>,              1,              1,              2,         1,            1,           1,       S<1, 4, 1, 8>,                 1, make_default_loop_scheduler(),    BF16,     BF16,                1,                 1,         2>
-        // clang-format on
-        >;
+    // clang-format on
+    >;
 
 } // namespace instance
 } // namespace device

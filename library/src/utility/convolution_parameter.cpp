@@ -64,9 +64,11 @@ ConvParam::ConvParam(ck::index_t n_dim,
                 conv_filter_strides_[i] +
             1;
 
-        if (output_spatial_lengths_[i] <= 0) {
-            throw std::runtime_error("ConvParam::ConvParam: "
-                               "the given input would result in output dimension less than 1!");
+        if(output_spatial_lengths_[i] <= 0)
+        {
+            throw std::runtime_error(
+                "ConvParam::ConvParam: "
+                "the given input would result in output dimension less than 1!");
         }
     }
 }
@@ -119,9 +121,11 @@ ConvParam::ConvParam(ck::long_index_t n_dim,
                 conv_filter_strides_[i] +
             1;
 
-        if (output_spatial_lengths_[i] <= 0) {
-            throw std::runtime_error("ConvParam::ConvParam: "
-                               "the given input would result in output dimension less than 1!");
+        if(output_spatial_lengths_[i] <= 0)
+        {
+            throw std::runtime_error(
+                "ConvParam::ConvParam: "
+                "the given input would result in output dimension less than 1!");
         }
     }
 }
