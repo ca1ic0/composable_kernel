@@ -267,7 +267,7 @@ endif()
 # define the macro with the current value (0 or 1)
 add_definitions(-DCK_TILE_USE_WMMA=${CK_TILE_USE_WMMA})
 
-if (SUPPORTED_GPU_TARGETS MATCHES "gfx12" AND NOT FORCE_DISABLE_WMMA AND DEFINED CK_ENABLE_FP8))
+if (SUPPORTED_GPU_TARGETS MATCHES "gfx12" AND NOT FORCE_DISABLE_WMMA AND DEFINED CK_ENABLE_FP8)
     message(STATUS "Enabling WMMA FP8 gemms on native architectures")
     add_definitions(-DCK_USE_WMMA_FP8)
     set(CK_USE_WMMA_FP8 "ON")

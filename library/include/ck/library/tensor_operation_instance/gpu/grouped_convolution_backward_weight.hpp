@@ -385,10 +385,6 @@ struct DeviceOperationInstanceFactory<ck::tensor_operation::device::DeviceGroupe
                             op_ptrs);
                         add_device_grouped_conv2d_bwd_weight_xdl_nhwgc_gkyxc_nhwgk_f32_tf32_pad0_pipev5_instances(
                             op_ptrs);
-
-                        // TODO: figure out this
-                        // add_device_grouped_conv2d_bwd_weight_two_stage_xdl_nhwgc_gkyxc_nhwgk_f32_instances(
-                        //     op_ptrs);
                     }
 #endif
                 }
@@ -548,9 +544,6 @@ struct DeviceOperationInstanceFactory<ck::tensor_operation::device::DeviceGroupe
                              is_same_v<ComputeTypeB, float>)
                 {
                     add_device_grouped_conv2d_bwd_weight_xdl_ngchw_gkcyx_ngkhw_f32_instances(
-                        op_ptrs);
-
-                    add_device_grouped_conv2d_bwd_weight_two_stage_xdl_ngchw_gkcyx_ngkhw_f32_instances(
                         op_ptrs);
                 }
 #endif
