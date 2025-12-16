@@ -77,7 +77,8 @@ template <typename GridwiseGemm,
           InMemoryDataOperationEnum OutElementOp,
           bool HasMainKBlockLoopInAllGemm,
           bool NoMainKBlockLoopInAllGemm,
-          bool CTranspose>
+          bool CTranspose,
+          index_t NumGroupsToMerge>
 __global__ void
 #if CK_USE_LAUNCH_BOUNDS
 __launch_bounds__(CK_MAX_THREAD_PER_BLOCK, CK_MIN_BLOCK_PER_CU)
@@ -101,7 +102,7 @@ __launch_bounds__(CK_MAX_THREAD_PER_BLOCK, CK_MIN_BLOCK_PER_CU)
     {
         // offset base pointer for each work-group
         const index_t block_args_id = __builtin_amdgcn_readfirstlane(blockIdx.x);
-        const index_t g_idx         = __builtin_amdgcn_readfirstlane(blockIdx.y);
+        const index_t g_idx         = __builtin_amdgcn_readfirstlane(blockIdx.y * NumGroupsToMerge);
         const index_t n_idx         = __builtin_amdgcn_readfirstlane(blockIdx.z / KBatch);
         const index_t k_idx         = __builtin_amdgcn_readfirstlane(blockIdx.z - n_idx * KBatch);
 
@@ -287,7 +288,8 @@ template <index_t NDimSpatial,
           typename AComputeType                          = ADataType,
           typename BComputeType                          = AComputeType,
           index_t MaxTransposeTransferInScalarPerVector  = 1,
-          index_t MaxTransposeTransferOutScalarPerVector = 1>
+          index_t MaxTransposeTransferOutScalarPerVector = 1,
+          index_t NumGroupsToMerge                       = 1>
 struct DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1
     : public DeviceGroupedConvBwdDataMultipleD<NDimSpatial,
                                                ALayout,    // output image
@@ -307,6 +309,8 @@ struct DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1
     // TODO: Extend support for more spatial dimensions.
     static_assert(NDimSpatial == 2 || NDimSpatial == 3,
                   "wrong! only implemented for 2D and 3D now");
+
+    static_assert(NumGroupsToMerge >= 1);
 
     // MaxGroupedGemmGroupsNum  is used to specify number of gemm args in compile time. With this
     // implementation we can avoid copy data to workspace before kernel launch since number of
@@ -387,7 +391,7 @@ struct DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1
                                                                      true, /*SplitConvN*/
                                                                      ABDataType,
                                                                      EDataType,
-                                                                     1,
+                                                                     NumGroupsToMerge,
                                                                      index_t,
                                                                      CTranspose>;
 
@@ -418,7 +422,7 @@ struct DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1
                                                   true, /*SplitConvN*/
                                                   ABDataType,
                                                   DDataType,
-                                                  1,       /*index_t NumGroupsToMerge = 1,*/
+                                                  NumGroupsToMerge, /*index_t NumGroupsToMerge = 1,*/
                                                   index_t, /* typename IndexType       =  */
                                                   CTranspose>;
                 return ConvToGemmBwdDataTransformD{}.MakeCDescriptor_M_N();
@@ -887,7 +891,7 @@ struct DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1
                                                               true, /*SplitConvN*/
                                                               ABDataType,
                                                               DDataType,
-                                                              1,
+                                                              NumGroupsToMerge,
                                                               index_t,
                                                               CTranspose>;
                             ConvToGemmBwdDataTransformD conv_to_gemm_transform_d{
@@ -1147,7 +1151,7 @@ struct DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1
         {
             float ave_time = 0;
 
-            const index_t gdy = arg.num_group_;
+            const index_t gdy = arg.num_group_ / NumGroupsToMerge;
             const index_t gdz = arg.num_workgroups_per_Conv_N_ * arg.k_batch_;
 
             const ADataType* p_a_grid = arg.p_a_grid_;
@@ -1219,7 +1223,8 @@ struct DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1
                             ElementOp,
                             has_main_loop,
                             no_main_loop,
-                            CTranspose>;
+                            CTranspose,
+                            NumGroupsToMerge>;
 
                         return launch_and_time_kernel_with_preprocess(
                             stream_config,
@@ -1258,7 +1263,8 @@ struct DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1
                             ElementOp,
                             has_main_loop,
                             no_main_loop,
-                            CTranspose>;
+                            CTranspose,
+                            NumGroupsToMerge>;
 
                         return launch_and_time_kernel_with_preprocess(
                             stream_config,
@@ -1554,6 +1560,18 @@ struct DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1
                 {
                     return false;
                 }
+            }
+        }
+
+        if constexpr(NumGroupsToMerge > 1)
+        {
+            if(!(ConvC == 1))
+            {
+                return false;
+            }
+            if(ConvG % NumGroupsToMerge != 0)
+            {
+                return false;
             }
         }
 
@@ -1892,7 +1910,8 @@ struct DeviceGroupedConvBwdDataMultipleD_Xdl_CShuffle_v1
             << ABlockTransferSrcScalarPerVector << ", "
             << BBlockTransferSrcScalarPerVector << ", "
             << CShuffleMXdlPerWavePerShuffle << ", "
-            << CShuffleNXdlPerWavePerShuffle;
+            << CShuffleNXdlPerWavePerShuffle << ", "
+            << NumGroupsToMerge;
 
             if constexpr(is_NGCHW_NGKHW<ELayout, BLayout, ALayout>() ||
                         is_NGCDHW_NGKDHW<ELayout, BLayout, ALayout>()) {

@@ -63,6 +63,11 @@ ConvParam::ConvParam(ck::index_t n_dim,
             (input_spatial_lengths_[i] + input_left_pads_[i] + input_right_pads_[i] - x_eff) /
                 conv_filter_strides_[i] +
             1;
+
+        if (output_spatial_lengths_[i] <= 0) {
+            throw std::runtime_error("ConvParam::ConvParam: "
+                               "the given input would result in output dimension less than 1!");
+        }
     }
 }
 
@@ -113,6 +118,11 @@ ConvParam::ConvParam(ck::long_index_t n_dim,
             (input_spatial_lengths_[i] + input_left_pads_[i] + input_right_pads_[i] - x_eff) /
                 conv_filter_strides_[i] +
             1;
+
+        if (output_spatial_lengths_[i] <= 0) {
+            throw std::runtime_error("ConvParam::ConvParam: "
+                               "the given input would result in output dimension less than 1!");
+        }
     }
 }
 
@@ -220,6 +230,7 @@ std::ostream& operator<<(std::ostream& os, const ck::utils::conv::ConvParam& p)
        << "\nN: " << p.N_ << "\nK: " << p.K_ << "\nC: " << p.C_
        << "\nfilter_spatial_lengths: " << p.filter_spatial_lengths_
        << "\ninput_spatial_lengths: " << p.input_spatial_lengths_
+       << "\noutput_spatial_lengths: " << p.output_spatial_lengths_
        << "\nconv_filter_strides: " << p.conv_filter_strides_
        << "\nconv_filter_dilations: " << p.conv_filter_dilations_
        << "\ninput_left_pads: " << p.input_left_pads_
