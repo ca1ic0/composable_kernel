@@ -88,61 +88,20 @@ float gemm_calc_quant(const ck_tile::QuantGemmHostArgs& args, const ck_tile::str
         constexpr bool transpose_c    = false;
 
         // row-col and tensor quants use the regular pipeline, A/B quants use their own
-        using PipelineProblem = std::conditional_t<
-            QuantMode == ck_tile::QuantType::RowColQuant ||
-                QuantMode == ck_tile::QuantType::TensorQuant,
-            ck_tile::GemmRowColTensorQuantPipelineProblem<typename TypeConfig::ADataType,
-                                                          typename TypeConfig::BDataType,
-                                                          typename TypeConfig::AccDataType,
-                                                          typename TypeConfig::AccDataType,
-                                                          GemmShape,
-                                                          GemmTraits,
-                                                          transpose_c,
-                                                          ComputeDataType,
-                                                          GemmConfig::Scheduler,
-                                                          has_hot_loop_v,
-                                                          tail_number_v>,
-            std::conditional_t<QuantMode == ck_tile::QuantType::AQuantGrouped,
-                               ck_tile::GemmAQuantPipelineProblem<typename TypeConfig::ADataType,
-                                                                  typename TypeConfig::QDataType,
-                                                                  typename TypeConfig::BDataType,
-                                                                  typename TypeConfig::AccDataType,
-                                                                  GemmShape,
-                                                                  GemmTraits,
-                                                                  QuantGroupSize,
-                                                                  transpose_c,
-                                                                  ComputeDataType,
-                                                                  GemmConfig::Scheduler,
-                                                                  has_hot_loop_v,
-                                                                  tail_number_v>,
-                               ck_tile::GemmBQuantPipelineProblem<typename TypeConfig::ADataType,
-                                                                  typename TypeConfig::BDataType,
-                                                                  typename TypeConfig::QDataType,
-                                                                  typename TypeConfig::AccDataType,
-                                                                  GemmShape,
-                                                                  GemmTraits,
-                                                                  QuantGroupSize,
-                                                                  ComputeDataType,
-                                                                  GemmConfig::Scheduler,
-                                                                  has_hot_loop_v,
-                                                                  tail_number_v>>>;
+        using PipelineProblem = ck_tile::GemmAQuantPipelineProblem<typename TypeConfig::ADataType,
+                                                                   typename TypeConfig::QDataType,
+                                                                   typename TypeConfig::BDataType,
+                                                                   typename TypeConfig::AccDataType,
+                                                                   GemmShape,
+                                                                   GemmTraits,
+                                                                   QuantGroupSize,
+                                                                   transpose_c,
+                                                                   ComputeDataType,
+                                                                   GemmConfig::Scheduler,
+                                                                   has_hot_loop_v,
+                                                                   tail_number_v>;
 
-        using GemmPipeline = std::conditional_t<
-            QuantMode == ck_tile::QuantType::RowColQuant ||
-                QuantMode == ck_tile::QuantType::TensorQuant,
-            ck_tile::GemmPipelineAgBgCrCompV3<PipelineProblem>,
-            std::conditional_t<
-                QuantMode == ck_tile::QuantType::AQuantGrouped,
-                std::conditional_t<GemmConfig::PreshuffleQuant == true,
-                                   ck_tile::AQuantGemmPipelineAgBgCrCompV3<PipelineProblem>,
-                                   ck_tile::AQuantGemmPipelineAgBgCrMem<PipelineProblem>>,
-                std::conditional_t<
-                    GemmConfig::PreshuffleB == true,
-                    ck_tile::WPQuantBPipelineAgBgCrV2<PipelineProblem>,
-                    std::conditional_t<
-                        std::is_same_v<typename TypeConfig::BDataType, ck_tile::pk_fp4_raw_t>,
-                        ck_tile::MxFp4GemmPipelineAgBgCrCompV3<PipelineProblem>,
-                        ck_tile::BQuantGemmPipelineAgBgCrCompV3<PipelineProblem>>>>>;
+        using GemmPipeline = ck_tile::AQuantGemmPipelineAgBgCrMem<PipelineProblem>;
 
         constexpr bool TiledPermuteN =
             (QuantGroupSize::kN > 1) ? false : GemmConfig::TiledMMAPermuteN;
@@ -837,43 +796,6 @@ int run_gemm_example_prec_type(const ck_tile::ArgParser& arg_parser)
         {
             return run_gemm_example_with_layouts<GemmConfig, TypeConfig, QuantGroupSize, QuantMode>(
                 arg_parser, Row{}, Row{}, Col{}, Col{}, Row{});
-        }
-
-        if constexpr(QuantMode == ck_tile::QuantType::AQuantGrouped && !GemmConfig::PreshuffleQuant)
-        {
-            if(a_layout == "R" && b_layout == "R")
-            {
-                return run_gemm_example_with_layouts<GemmConfig,
-                                                     TypeConfig,
-                                                     QuantGroupSize,
-                                                     QuantMode>(
-                    arg_parser, Row{}, Row{}, Row{}, Col{}, Row{});
-            }
-            else if(a_layout == "C" && b_layout == "R")
-            {
-                return run_gemm_example_with_layouts<GemmConfig,
-                                                     TypeConfig,
-                                                     QuantGroupSize,
-                                                     QuantMode>(
-                    arg_parser, Col{}, Row{}, Row{}, Col{}, Row{});
-            }
-            else if(a_layout == "C" && b_layout == "C")
-            {
-                return run_gemm_example_with_layouts<GemmConfig,
-                                                     TypeConfig,
-                                                     QuantGroupSize,
-                                                     QuantMode>(
-                    arg_parser, Col{}, Col{}, Col{}, Col{}, Row{});
-            }
-            else
-            {
-                throw std::runtime_error("Unsupported memory layout for the input matrices!");
-            }
-        }
-
-        else
-        {
-            throw std::runtime_error("Unsupported memory layout for the input matrices!");
         }
     }
     else

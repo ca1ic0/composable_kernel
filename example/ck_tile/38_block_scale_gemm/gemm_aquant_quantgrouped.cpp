@@ -24,36 +24,4 @@ void aquant_quantgrouped_instance_factory(
                                           QuantGroupSize,
                                           ck_tile::QuantType::AQuantGrouped>(arg_parser);
     };
-    lut[hash_multiple_strings(
-        {"bf8", "aquant", "non-preshufflequant", "1x1x128"})] = [](const ck_tile::ArgParser&
-                                                                       arg_parser) {
-        using TypeConfig =
-            decltype(GemmQuantTypeConfig<ck_tile::bf8_t, ck_tile::bf8_t, ck_tile::half_t, float>{});
-        return run_gemm_example_prec_type<GemmConfig<ck_tile::bf8_t>,
-                                          TypeConfig,
-                                          QuantGroupSize,
-                                          ck_tile::QuantType::AQuantGrouped>(arg_parser);
-    };
-    lut[hash_multiple_strings({"fp8i4", "aquant", "non-preshufflequant", "1x1x128"})] =
-        [](const ck_tile::ArgParser& arg_parser) {
-            using TypeConfig = decltype(GemmQuantTypeConfig<ck_tile::pk_int4_t,
-                                                            ck_tile::fp8_t,
-                                                            ck_tile::half_t,
-                                                            ck_tile::fp8_t>{});
-            return run_gemm_example_prec_type<GemmConfig<ck_tile::fp8_t>,
-                                              TypeConfig,
-                                              QuantGroupSize,
-                                              ck_tile::QuantType::AQuantGrouped>(arg_parser);
-        };
-    lut[hash_multiple_strings({"bf8i4", "aquant", "non-preshufflequant", "1x1x128"})] =
-        [](const ck_tile::ArgParser& arg_parser) {
-            using TypeConfig = decltype(GemmQuantTypeConfig<ck_tile::pk_int4_t,
-                                                            ck_tile::bf8_t,
-                                                            ck_tile::half_t,
-                                                            ck_tile::bf8_t>{});
-            return run_gemm_example_prec_type<GemmConfig<ck_tile::bf8_t>,
-                                              TypeConfig,
-                                              QuantGroupSize,
-                                              ck_tile::QuantType::AQuantGrouped>(arg_parser);
-        };
 }
