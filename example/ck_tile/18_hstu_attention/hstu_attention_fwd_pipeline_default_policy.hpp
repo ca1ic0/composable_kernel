@@ -106,10 +106,8 @@ struct HstuAttentionFwdPipelineQRKSVSDefaultPolicy
         constexpr index_t kMPerBlock = GetQKBlockGemmSingleRepM<Problem>();
         constexpr index_t kKPerBlock = Problem::HstuAttentionTileSetting::kQKHeaddim;
 
-        return Problem::template GetDramTileAccessMaxVectorSize<QDataType,
-                                                                kBlockSize,
-                                                                kMPerBlock,
-                                                                kKPerBlock>();
+        return detail::
+            GetDramTileAccessMaxVectorSize<QDataType, kBlockSize, kMPerBlock, kKPerBlock>();
     }
 
     template <typename Problem>
