@@ -4,7 +4,14 @@
 #pragma once
 
 #include "ck_tile/core.hpp"
-#include "ck_tile/ops/fmha/pipeline/block_fmha_pipeline_qx_ks_vs_custom_policy.hpp"
+#include "ck_tile/ops/gemm/block/block_gemm_problem.hpp"
+#include "ck_tile/ops/gemm/pipeline/tile_gemm_shape.hpp"
+#include "ck_tile/ops/gemm/warp/warp_gemm_dispatcher.hpp"
+
+#include "ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2_custom_policy.hpp"
+#include "ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_v2.hpp"
+#include "ck_tile/ops/gemm/block/block_gemm_areg_bsmem_trload_creg_v2.hpp"
+#include "ck_tile/ops/gemm/block/block_gemm_areg_bsmem_creg_one_warp_v1.hpp"
 
 namespace ck_tile {
 
@@ -614,7 +621,12 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetchDefaultPolicy
                                                  WarpGemm>;
 
         if constexpr(1 < Problem::kNumGemm1Warps)
-            return BlockGemmARegBSmemCRegV2<GemmProblem, BlockGemmPolicy>{};
+        {
+            if constexpr(!Problem::kUseTrLoad)
+                return BlockGemmARegBSmemCRegV2<GemmProblem, BlockGemmPolicy>{};
+            else
+                return BlockGemmARegBSmemTrLoadCRegV2<GemmProblem, BlockGemmPolicy>{};
+        }
         else
             return BlockGemmARegBSmemCRegOneWarpV1<GemmProblem, BlockGemmPolicy>{};
     }

@@ -1345,18 +1345,28 @@ struct FmhaFwdKernel
                         number<FmhaPipeline::kAlignmentV>{},
                         number<1>{});
 
-                    const auto v_dram_transposed = transform_tensor_view(
-                        v_dram_naive,
-                        make_tuple(make_pass_through_transform(kargs.hdim_v),
-                                   make_pass_through_transform(kargs.seqlen_k)),
-                        make_tuple(sequence<1>{}, sequence<0>{}),
-                        make_tuple(sequence<0>{}, sequence<1>{}));
+                    if constexpr(!kUseTrLoad)
+                    {
+                        const auto v_dram_transposed = transform_tensor_view(
+                            v_dram_naive,
+                            make_tuple(make_pass_through_transform(kargs.hdim_v),
+                                       make_pass_through_transform(kargs.seqlen_k)),
+                            make_tuple(sequence<1>{}, sequence<0>{}),
+                            make_tuple(sequence<0>{}, sequence<1>{}));
 
-                    constexpr bool kPadSeqLenK_ = kUseAsyncCopy ? kPadSeqLenK : false;
-                    return pad_tensor_view(
-                        v_dram_transposed,
-                        make_tuple(number<FmhaPipeline::kN1>{}, number<FmhaPipeline::kK1>{}),
-                        sequence<kPadHeadDimV, kPadSeqLenK_>{});
+                        constexpr bool kPadSeqLenK_ = kUseAsyncCopy ? kPadSeqLenK : false;
+                        return pad_tensor_view(
+                            v_dram_transposed,
+                            make_tuple(number<FmhaPipeline::kN1>{}, number<FmhaPipeline::kK1>{}),
+                            sequence<kPadHeadDimV, kPadSeqLenK_>{});
+                    }
+                    else
+                    {
+                        return pad_tensor_view(
+                            v_dram_naive,
+                            make_tuple(number<FmhaPipeline::kK1>{}, number<FmhaPipeline::kN1>{}),
+                            sequence<false, kPadHeadDimV>{});
+                    };
                 }
                 else
                 {

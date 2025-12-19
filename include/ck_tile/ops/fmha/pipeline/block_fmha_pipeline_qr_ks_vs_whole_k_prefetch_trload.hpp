@@ -12,7 +12,7 @@
 namespace ck_tile {
 
 template <typename Problem_, typename Policy_ = BlockFmhaPipelineQRKSVSWholeKPrefetchDefaultPolicy>
-struct BlockFmhaPipelineQRKSVSWholeKPrefetch
+struct BlockFmhaPipelineQRKSVSWholeKPrefetchTrLoad
 {
     using Problem               = remove_cvref_t<Problem_>;
     using Policy                = remove_cvref_t<Policy_>;
@@ -45,7 +45,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
     static constexpr index_t kQKHeaddim    = BlockFmhaShape::kQKHeaddim;
     static constexpr index_t kSubQKHeaddim = BlockFmhaShape::kSubQKHeaddim;
 
-    static_assert(kQKHeaddim <= 256, "hdim bigger than 256 is not suitable for this pipeline!");
+    static_assert(kSubQKHeaddim <= 256, "hdim bigger than 256 is not suitable for this pipeline!");
 
     static constexpr bool kIsGroupMode      = Problem::kIsGroupMode;
     static constexpr bool kPadSeqLenQ       = Problem::kPadSeqLenQ;
@@ -57,9 +57,9 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
     static constexpr bool kHasDropout       = Problem::kHasDropout;
     static constexpr bool kHasLogitsSoftCap = Problem::kHasLogitsSoftCap;
 
-    static_assert(Problem::kUseTrLoad == false, "Check failed!");
+    static_assert(Problem::kUseTrLoad == true, "Check failed!");
 
-    static constexpr bool kUseTrLoad = false;
+    static constexpr bool kUseTrLoad = true;
 
     // last dimension vector length used to create tensor view(and decide buffer_load vector length)
     // ... together with tensor distribution. tensor dist should able to overwrite this
@@ -248,8 +248,8 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
 
         auto v_dram_window =
             make_tile_window(v_dram_block_window_tmp.get_bottom_tensor_view(),
-                             make_tuple(number<kN1>{}, number<kK1>{}),
-                             {0, seqlen_k_start}, // TODO: hdim split?
+                             make_tuple(number<kK1>{}, number<kN1>{}),
+                             {seqlen_k_start, 0},
                              Policy::template MakeVDramTileDistribution<Problem>());
         // V tile in LDS
         auto v_lds = make_tensor_view<address_space_enum::lds>(
@@ -264,13 +264,13 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
         statically_indexed_array<v_tile_type, NumPrefetchV> v_tiles;
 
         using v_lds_window_type =
-            decltype(get_slice_tile(v_lds_window, sequence<0, 0>{}, sequence<kN1, kK1>{}));
+            decltype(get_slice_tile(v_lds_window, sequence<0, 0>{}, sequence<kK1, kN1>{}));
 
         statically_indexed_array<v_lds_window_type, NumVLdsBuffers> v_lds_windows;
 
         static_for<0, NumVLdsBuffers, 1>{}([&](auto i_buf) {
             v_lds_windows[i_buf] = get_slice_tile(
-                v_lds_window, sequence<i_buf * kN1, 0>{}, sequence<(i_buf + 1) * kN1, kK1>{});
+                v_lds_window, sequence<i_buf * kK1, 0>{}, sequence<(i_buf + 1) * kK1, kN1>{});
         });
 
         // Block GEMM
@@ -377,7 +377,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
 
                         // prefetch first v_tile
                         v_tiles[I0] = load_tile(v_dram_window);
-                        move_tile_window(v_dram_window, {0, kK1});
+                        move_tile_window(v_dram_window, {kK1, 0});
 
                         move_tile_window(k_dram_window, {kN0, -(k0_loops - 1) * kK0});
 
@@ -418,7 +418,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                             {
                                 // prefetch first v_tile
                                 v_tiles[I0] = load_tile(v_dram_window);
-                                move_tile_window(v_dram_window, {0, kK1});
+                                move_tile_window(v_dram_window, {kK1, 0});
                             };
 
                             block_sync_lds();
@@ -441,7 +441,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
 
                         // prefetch first v_tile
                         v_tiles[I0] = load_tile(v_dram_window);
-                        move_tile_window(v_dram_window, {0, kK1});
+                        move_tile_window(v_dram_window, {kK1, 0});
 
                         clear_tile(s_acc);
                         block_sync_lds();
@@ -499,7 +499,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                             {
                                 // prefetch first v_tile
                                 v_tiles[I0] = load_tile(v_dram_window);
-                                move_tile_window(v_dram_window, {0, kK1});
+                                move_tile_window(v_dram_window, {kK1, 0});
 
                                 clear_tile(s_acc);
                             };
@@ -533,7 +533,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                     {
                         // prefetch first v_tile
                         v_tiles[I0] = load_tile(v_dram_window);
-                        move_tile_window(v_dram_window, {0, kK1});
+                        move_tile_window(v_dram_window, {kK1, 0});
                     }
 
                     block_sync_lds();
@@ -552,7 +552,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
 
             static_for<1, NumPrefetchV, 1>{}([&](auto i_buf) {
                 v_tiles[i_buf] = load_tile(v_dram_window);
-                move_tile_window(v_dram_window, {0, kK1});
+                move_tile_window(v_dram_window, {kK1, 0});
             });
 
             // STAGE 2, scale_s, add bias, mask, softmax
@@ -716,12 +716,8 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
 
             __builtin_amdgcn_sched_barrier(0x7f);
 
-            auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
-                Policy::template MakeShuffledVRegTileDistribution<Problem>());
-            shuffle_tile(v_shuffle_tmp, v_tiles[I0]);
-
             store_tile(v_lds_windows[I0],
-                       tile_elementwise_in(v_element_func, v_shuffle_tmp),
+                       tile_elementwise_in(v_element_func, v_tiles[I0]),
                        partition_index);
 
             __builtin_amdgcn_sched_barrier(0);
@@ -755,14 +751,11 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                                    p, sequence<0, i_k1 * kK1>{}, sequence<kM0, (i_k1 + 1) * kK1>{}),
                                v_lds_windows[number<i_k1 % NumVLdsBuffers>{}]);
 
-                        auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
-                            Policy::template MakeShuffledVRegTileDistribution<Problem>());
-                        shuffle_tile(v_shuffle_tmp, v_tiles[I0]);
                         store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
-                                   tile_elementwise_in(v_element_func, v_shuffle_tmp),
+                                   tile_elementwise_in(v_element_func, v_tiles[I0]),
                                    partition_index);
 
-                        move_tile_window(v_dram_window, {0, kK1});
+                        move_tile_window(v_dram_window, {kK1, 0});
                     });
                 }
                 else // NumVLdsBuffers == 3 or 2
@@ -777,15 +770,14 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetch
                                    p, sequence<0, i_k1 * kK1>{}, sequence<kM0, (i_k1 + 1) * kK1>{}),
                                v_lds_windows[number<i_k1 % NumVLdsBuffers>{}]);
 
-                        auto v_shuffle_tmp = make_static_distributed_tensor<VDataType>(
-                            Policy::template MakeShuffledVRegTileDistribution<Problem>());
-                        shuffle_tile(v_shuffle_tmp, v_tiles[number<(i_k1 + 1) % NumPrefetchV>{}]);
-                        store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
-                                   tile_elementwise_in(v_element_func, v_shuffle_tmp),
-                                   partition_index);
+                        store_tile(
+                            v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
+                            tile_elementwise_in(v_element_func,
+                                                v_tiles[number<(i_k1 + 1) % NumPrefetchV>{}]),
+                            partition_index);
 
                         if constexpr(i_k1 < k1_loops - NumPrefetchV)
-                            move_tile_window(v_dram_window, {0, kK1});
+                            move_tile_window(v_dram_window, {kK1, 0});
                     });
                 }
             }
