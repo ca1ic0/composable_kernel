@@ -23,6 +23,29 @@
 
 namespace ck_tile {
 
+namespace detail {
+
+// A helper struct for detecting naive_hdim_load, naive_hdim_load means load tiles of
+// hdim96/hdim160/hdim192 without padding the tensor_view/tile_window to hdim128/hdim256
+// naive_hdim_load is current supported by the qr_ks_vs_whole_k_prefetch_pipeline
+template <typename T, typename = void>
+struct has_naive_hdim_load_flag : std::false_type
+{
+};
+
+template <typename T>
+struct has_naive_hdim_load_flag<
+    T,
+    std::enable_if_t<std::is_convertible_v<decltype(T::kIsNaiveHDimLoad), bool> &&
+                     T::kIsNaiveHDimLoad>> : std::true_type
+{
+};
+
+template <typename T>
+static inline constexpr bool is_naive_hdim_load_v = has_naive_hdim_load_flag<T>::value;
+
+}; // namespace detail
+
 template <typename FmhaPipeline_, typename EpiloguePipeline_>
 struct FmhaFwdKernel
 {
@@ -1271,6 +1294,10 @@ struct FmhaFwdKernel
                                static_cast<long_index_t>(i_nhead) * kargs.nhead_stride_o +
                                batch_offset_o;
 
+            constexpr index_t kQKHeaddimToUse = detail::is_naive_hdim_load_v<FmhaPipeline>
+                                                    ? FmhaPipeline::kQKHeaddim
+                                                    : FmhaPipeline::kSubQKHeaddim;
+
             // Q/K/V DRAM and DRAM window
             const auto q_dram = [&]() {
                 const auto q_dram_naive = make_naive_tensor_view<address_space_enum::global>(
@@ -1281,10 +1308,10 @@ struct FmhaFwdKernel
                     number<1>{});
                 if constexpr(FmhaPipeline::kQLoadOnce)
                 {
-                    return pad_tensor_view(q_dram_naive,
-                                           make_tuple(number<FmhaPipeline::kM0>{},
-                                                      number<FmhaPipeline::kSubQKHeaddim>{}),
-                                           sequence<kPadSeqLenQ, kPadHeadDimQ>{});
+                    return pad_tensor_view(
+                        q_dram_naive,
+                        make_tuple(number<FmhaPipeline::kM0>{}, number<kQKHeaddimToUse>{}),
+                        sequence<kPadSeqLenQ, kPadHeadDimQ>{});
                 }
                 else
                 {
@@ -1352,8 +1379,7 @@ struct FmhaFwdKernel
                 q_dram,
                 [&]() {
                     if constexpr(FmhaPipeline::kQLoadOnce)
-                        return make_tuple(number<FmhaPipeline::kM0>{},
-                                          number<FmhaPipeline::kSubQKHeaddim>{});
+                        return make_tuple(number<FmhaPipeline::kM0>{}, number<kQKHeaddimToUse>{});
                     else
                         return make_tuple(number<FmhaPipeline::kM0>{}, number<FmhaPipeline::kK0>{});
                 }(),
