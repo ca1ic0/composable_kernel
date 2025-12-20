@@ -349,17 +349,37 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetchTrLoad
                 {
                     if(num_total_loop > 1) // there are multiple iterations
                     {
-                        static_for<0, k0_loops - 1, 1>{}([&](auto i_k0) {
+                        static_for<0, k0_loops, 1>{}([&](auto i_k0) {
                             store_tile(k_lds_windows[number<i_k0 % NumKLdsBuffers>{}],
                                        tile_elementwise_in(k_element_func, k_tiles[number<i_k0>{}]),
                                        partition_index);
 
-                            k_tiles[number<i_k0 + 1>{}] = load_tile(k_dram_window);
+                            if constexpr(i_k0 < k0_loops - 1)
+                                k_tiles[number<i_k0 + 1>{}] = load_tile(k_dram_window);
                             if constexpr(i_k0 < k0_loops - 2)
                                 move_tile_window(k_dram_window, {0, kK0});
 
                             if constexpr(i_k0 == 0)
                                 clear_tile(s_acc);
+
+                            if constexpr(i_k0 == k0_loops - 1)
+                            {
+                                // prefetch first v_tile
+                                v_tiles[I0] = load_tile(v_dram_window);
+                                move_tile_window(v_dram_window, {kK1, 0});
+
+                                move_tile_window(k_dram_window, {kN0, -(k0_loops - 1) * kK0});
+
+                                // prefetch all k_tiles for next iteration
+                                static_for<0, k0_loops, 1>{}([&](auto ii_k0) {
+                                    k_tiles[number<ii_k0>{}] = load_tile(k_dram_window);
+
+                                    if constexpr(ii_k0 < k0_loops - 1)
+                                        move_tile_window(k_dram_window, {0, kK0});
+                                });
+
+                                move_tile_window(k_dram_window, {0, -(k0_loops - 1) * kK0});
+                            };
 
                             block_sync_lds();
                             // execute current unroll of gemm_0
@@ -369,35 +389,6 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetchTrLoad
                                                   sequence<kM0, (i_k0 + 1) * kK0>{}),
                                    k_lds_windows[number<i_k0 % NumKLdsBuffers>{}]);
                         });
-
-                        store_tile(
-                            k_lds_windows[number<(k0_loops - 1) % NumKLdsBuffers>{}],
-                            tile_elementwise_in(k_element_func, k_tiles[number<k0_loops - 1>{}]),
-                            partition_index);
-
-                        // prefetch first v_tile
-                        v_tiles[I0] = load_tile(v_dram_window);
-                        move_tile_window(v_dram_window, {kK1, 0});
-
-                        move_tile_window(k_dram_window, {kN0, -(k0_loops - 1) * kK0});
-
-                        // prefetch all k_tiles for next iteration
-                        static_for<0, k0_loops, 1>{}([&](auto i_k0) {
-                            k_tiles[number<i_k0>{}] = load_tile(k_dram_window);
-
-                            if constexpr(i_k0 < k0_loops - 1)
-                                move_tile_window(k_dram_window, {0, kK0});
-                        });
-
-                        move_tile_window(k_dram_window, {0, -(k0_loops - 1) * kK0});
-
-                        block_sync_lds();
-                        // execute last unroll of gemm_0
-                        gemm_0(s_acc,
-                               get_slice_tile(q_tile,
-                                              sequence<0, (k0_loops - 1) * kK0>{},
-                                              sequence<kM0, k0_loops * kK0>{}),
-                               k_lds_windows[number<(k0_loops - 1) % NumKLdsBuffers>{}]);
                     }
                     else // there is only single iteration
                     {
@@ -435,48 +426,37 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetchTrLoad
                 {
                     if(i_total_loops < num_total_loop - 1) // intermediate iteration
                     {
-                        store_tile(k_lds_windows[I0],
-                                   tile_elementwise_in(k_element_func, k_tiles[I0]),
-                                   partition_index);
-
-                        // prefetch first v_tile
-                        v_tiles[I0] = load_tile(v_dram_window);
-                        move_tile_window(v_dram_window, {kK1, 0});
-
-                        clear_tile(s_acc);
-                        block_sync_lds();
-                        gemm_0(s_acc,
-                               get_slice_tile(q_tile, sequence<0, 0>{}, sequence<kM0, kK0>{}),
-                               k_lds_windows[I0]);
-
-                        store_tile(k_lds_windows[I1],
-                                   tile_elementwise_in(k_element_func, k_tiles[I1]),
-                                   partition_index);
-
-                        move_tile_window(k_dram_window, {kN0, 0});
-
-                        // prefetch first k_tile for next iteration
-                        k_tiles[I0] = load_tile(k_dram_window);
-                        move_tile_window(k_dram_window, {0, kK0});
-
-                        k_tiles[I1] = load_tile(k_dram_window);
-                        if constexpr(1 < k0_loops - 1)
-                            move_tile_window(k_dram_window, {0, kK0});
-
-                        block_sync_lds();
-                        gemm_0(s_acc,
-                               get_slice_tile(q_tile, sequence<0, kK0>{}, sequence<kM0, 2 * kK0>{}),
-                               k_lds_windows[I1]);
-
-                        // during the gemm-loop, also prefetch other k_tiles for next iteration
-                        static_for<2, k0_loops, 1>{}([&](auto i_k0) {
+                        static_for<0, k0_loops, 1>{}([&](auto i_k0) {
                             store_tile(k_lds_windows[number<i_k0 % NumKLdsBuffers>{}],
                                        k_tiles[number<i_k0>{}],
                                        partition_index);
 
-                            k_tiles[number<i_k0>{}] = load_tile(k_dram_window);
-                            if constexpr(i_k0 < k0_loops - 1)
+                            if constexpr(i_k0 == 0)
+                            {
+                                // prefetch first v_tile
+                                v_tiles[I0] = load_tile(v_dram_window);
+                                move_tile_window(v_dram_window, {kK1, 0});
+
+                                clear_tile(s_acc);
+                            };
+                            if constexpr(i_k0 == 1)
+                            {
+                                move_tile_window(k_dram_window, {kN0, 0});
+
+                                // prefetch first k_tile for next iteration
+                                k_tiles[I0] = load_tile(k_dram_window);
                                 move_tile_window(k_dram_window, {0, kK0});
+
+                                k_tiles[I1] = load_tile(k_dram_window);
+                                if constexpr(1 < k0_loops - 1)
+                                    move_tile_window(k_dram_window, {0, kK0});
+                            };
+                            if constexpr(i_k0 >= 2)
+                            {
+                                k_tiles[number<i_k0>{}] = load_tile(k_dram_window);
+                                if constexpr(i_k0 < k0_loops - 1)
+                                    move_tile_window(k_dram_window, {0, kK0});
+                            };
 
                             block_sync_lds();
                             gemm_0(s_acc,
