@@ -44,6 +44,23 @@ struct has_naive_hdim_load_flag<
 template <typename T>
 static inline constexpr bool is_naive_hdim_load_v = has_naive_hdim_load_flag<T>::value;
 
+// A helper struct for detechting kUseTrLoad
+template <typename T, typename = void>
+struct has_use_trload_flag : std::false_type
+{
+};
+
+template <typename T>
+struct has_use_trload_flag<
+    T,
+    std::enable_if_t<std::is_convertible_v<decltype(T::kUseTrLoad), bool> && T::kUseTrLoad>>
+    : std::true_type
+{
+};
+
+template <typename T>
+static inline constexpr bool is_using_trload_v = has_use_trload_flag<T>::value;
+
 }; // namespace detail
 
 template <typename FmhaPipeline_, typename EpiloguePipeline_>
@@ -87,13 +104,8 @@ struct FmhaFwdKernel
     static constexpr bool kHasMask = FmhaMask::IsMasking;
 
     static constexpr bool kUseAsyncCopy = FmhaPipeline::Policy::AsyncCopy;
+    static constexpr bool kUseTrLoad    = detail::is_using_trload_v<FmhaPipeline>;
 
-    static constexpr bool kUseTrLoad = FmhaPipeline::Problem::kUseTrLoad;
-#if defined(__gfx950__)
-    static constexpr bool kIsAvailable = true;
-#else
-    static constexpr bool kIsAvailable = !kUseTrLoad;
-#endif
     static constexpr std::string_view kPipelineName = FmhaPipeline::name;
 
     // clang-format off
@@ -1139,11 +1151,7 @@ struct FmhaFwdKernel
         return ck_tile::max(FmhaPipeline::GetSmemSize(), EpiloguePipeline::GetSmemSize());
     }
 
-    CK_TILE_DEVICE void operator()(Kargs kargs) const
-    {
-        if constexpr(kIsAvailable)
-            run_(std::move(kargs));
-    }
+    CK_TILE_DEVICE void operator()(Kargs kargs) const { run_(std::move(kargs)); }
 
     CK_TILE_DEVICE void run_(Kargs kargs) const
     {
