@@ -192,6 +192,7 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetchTrLoad
         constexpr auto NumPrefetchV   = Policy::template GetNumPrefetchV<Problem>();
 
         static_assert(NumKLdsBuffers >= 2);
+        static_assert(NumPrefetchV >= 2);
 
         auto q_dram_window = make_tile_window(q_dram_block_window_tmp.get_bottom_tensor_view(),
                                               make_tuple(number<kM0>{}, number<kQKHeaddim>{}),
@@ -718,56 +719,30 @@ struct BlockFmhaPipelineQRKSVSWholeKPrefetchTrLoad
             }
 
             // STAGE 3, KV gemm
-            if constexpr(k1_loops > 1)
-            {
-                if constexpr(NumPrefetchV == 1) // NumVLdsBuffers == 2
+            static_for<0, k1_loops, 1>{}([&](auto i_k1) {
+                if constexpr(i_k1 < k1_loops - NumPrefetchV)
+                    v_tiles[number<i_k1 % NumPrefetchV>{}] = load_tile(v_dram_window);
+
+                block_sync_lds();
+                gemm_1(
+                    o_acc,
+                    get_slice_tile(p, sequence<0, i_k1 * kK1>{}, sequence<kM0, (i_k1 + 1) * kK1>{}),
+                    v_lds_windows[number<i_k1 % NumVLdsBuffers>{}]);
+
+                if constexpr(i_k1 < k1_loops - 1)
                 {
-                    static_for<0, k1_loops - 1, 1>{}([&](auto i_k1) {
-                        v_tiles[I0] = load_tile(v_dram_window);
+                    store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
+                               tile_elementwise_in(v_element_func,
+                                                   v_tiles[number<(i_k1 + 1) % NumPrefetchV>{}]),
+                               partition_index);
+                };
 
-                        block_sync_lds();
-                        gemm_1(o_acc,
-                               get_slice_tile(
-                                   p, sequence<0, i_k1 * kK1>{}, sequence<kM0, (i_k1 + 1) * kK1>{}),
-                               v_lds_windows[number<i_k1 % NumVLdsBuffers>{}]);
+                if constexpr(i_k1 < k1_loops - NumPrefetchV)
+                    move_tile_window(v_dram_window, {kK1, 0});
+            });
 
-                        store_tile(v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
-                                   tile_elementwise_in(v_element_func, v_tiles[I0]),
-                                   partition_index);
-
-                        move_tile_window(v_dram_window, {kK1, 0});
-                    });
-                }
-                else // NumVLdsBuffers == 3 or 2
-                {
-                    static_for<0, k1_loops - 1, 1>{}([&](auto i_k1) {
-                        if constexpr(i_k1 < k1_loops - NumPrefetchV)
-                            v_tiles[number<i_k1 % NumPrefetchV>{}] = load_tile(v_dram_window);
-
-                        block_sync_lds();
-                        gemm_1(o_acc,
-                               get_slice_tile(
-                                   p, sequence<0, i_k1 * kK1>{}, sequence<kM0, (i_k1 + 1) * kK1>{}),
-                               v_lds_windows[number<i_k1 % NumVLdsBuffers>{}]);
-
-                        store_tile(
-                            v_lds_windows[number<(i_k1 + 1) % NumVLdsBuffers>{}],
-                            tile_elementwise_in(v_element_func,
-                                                v_tiles[number<(i_k1 + 1) % NumPrefetchV>{}]),
-                            partition_index);
-
-                        if constexpr(i_k1 < k1_loops - NumPrefetchV)
-                            move_tile_window(v_dram_window, {kK1, 0});
-                    });
-                }
-            }
             // move K tile windows
             move_tile_window(k_dram_block_window, {kN0, 0});
-
-            block_sync_lds();
-            gemm_1(o_acc,
-                   get_slice_tile(p, sequence<0, (k1_loops - 1) * kK1>{}, sequence<kM0, kN0>{}),
-                   v_lds_windows[number<(k1_loops - 1) % NumVLdsBuffers>{}]);
 
             if constexpr(Policy::template IsFirstKLdsBufferOverlapLastVLdsBuffer<Problem>())
             {
