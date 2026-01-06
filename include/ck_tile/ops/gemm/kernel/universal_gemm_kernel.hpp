@@ -13,6 +13,7 @@
 #include "ck_tile/host/stream_utils.hpp"
 #include "ck_tile/core/utility/env.hpp"
 #include "ck_tile/core/utility/type_traits.hpp"
+#include "ck_tile/core/utility/persistent_async_input_scheduler.hpp"
 
 namespace ck_tile {
 
@@ -41,7 +42,9 @@ struct UniversalGemmHostArgs
                                        const std::array<index_t, NumATensor>& stride_As_,
                                        const std::array<index_t, NumBTensor>& stride_Bs_,
                                        const std::array<index_t, NumDTensor>& stride_Ds_,
-                                       index_t stride_E_)
+                                       index_t stride_E_,
+                                       PersistentAsyncInputScheduler async_input_scheduler_ =
+                                           PersistentAsyncInputScheduler{})
         : as_ptr(as_ptr_),
           bs_ptr(bs_ptr_),
           ds_ptr(ds_ptr_),
@@ -53,7 +56,8 @@ struct UniversalGemmHostArgs
           stride_Bs(stride_Bs_),
           stride_Ds(stride_Ds_),
           stride_E(stride_E_),
-          k_batch(k_batch_)
+          k_batch(k_batch_),
+          async_input_scheduler(async_input_scheduler_)
     {
     }
 
@@ -78,6 +82,7 @@ struct UniversalGemmHostArgs
     };
 
     index_t k_batch;
+    PersistentAsyncInputScheduler async_input_scheduler;
 };
 
 /// @brief The GEMM kernel device arguments.
@@ -111,6 +116,8 @@ struct UniversalGemmKernelArgs
     ///        (in memory) of E tensor.
     index_t stride_E;
     index_t k_batch;
+    /// @brief Persistent async input scheduler for chunk-based tile scheduling.
+    PersistentAsyncInputScheduler async_input_scheduler;
 };
 
 /// @brief The Universal GEMM kernel template.
@@ -315,7 +322,8 @@ struct UniversalGemmKernel
                           hostArgs.stride_Bs,
                           hostArgs.stride_Ds,
                           hostArgs.stride_E,
-                          hostArgs.k_batch};
+                          hostArgs.k_batch,
+                          hostArgs.async_input_scheduler};
     }
 
     CK_TILE_HOST_DEVICE static constexpr index_t GetSmemSize()

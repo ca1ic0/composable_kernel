@@ -129,7 +129,8 @@ struct StreamKKernel
                                       host_args.stride_Bs,
                                       host_args.stride_Ds,
                                       host_args.stride_E,
-                                      host_args.k_batch},
+                                      host_args.k_batch,
+                                      host_args.async_input_scheduler},
               // The workspace pointer is set to nullptr because we must first
               // instantiate the TilePartitioner to get the necessary size
               workspace_ptr{nullptr},
