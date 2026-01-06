@@ -592,7 +592,7 @@ struct TransformConvBwdDataToGemm_v1
         else if constexpr(is_same_v<ALayout, tensor_layout::convolution::GNHWK>)
         {
             // implement on demand
-            static_assert(NumGroupsToMerge == 1);
+            static_assert(NumGroupsToMerge == 1, "Merge group doesn't support GNHWK layout.");
 
             // assume packed
             if constexpr(ConvBwdDataSpecialization ==
@@ -609,7 +609,7 @@ struct TransformConvBwdDataToGemm_v1
         else if constexpr(is_same_v<ALayout, tensor_layout::convolution::GNDHWK>)
         {
             // implement on demand
-            static_assert(NumGroupsToMerge == 1);
+            static_assert(NumGroupsToMerge == 1, "Merge group doesn't support GNDHWK layout.");
 
             // assume packed
             if constexpr(ConvBwdDataSpecialization ==
@@ -626,7 +626,7 @@ struct TransformConvBwdDataToGemm_v1
         else if constexpr(is_same_v<ALayout, tensor_layout::convolution::NGKHW>)
         {
             // implement on demand
-            static_assert(NumGroupsToMerge == 1);
+            static_assert(NumGroupsToMerge == 1, "Merge group doesn't support NGKHW layout.");
 
             // assume packed
             static_assert(ConvBwdDataSpecialization ==
@@ -646,7 +646,7 @@ struct TransformConvBwdDataToGemm_v1
         else if constexpr(is_same_v<ALayout, tensor_layout::convolution::NGKDHW>)
         {
             // implement on demand
-            static_assert(NumGroupsToMerge == 1);
+            static_assert(NumGroupsToMerge == 1, "Merge group doesn't support NGKDHW layout.");
 
             // assume packed
             static_assert(ConvBwdDataSpecialization ==
