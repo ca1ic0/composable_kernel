@@ -7,20 +7,14 @@
 
 namespace ck_tile {
 
-/// @brief Persistent async input scheduler structure for managing chunk-based tile scheduling.
-///
-/// This structure contains scheduling parameters for persistent async input processing,
-/// enabling efficient chunk-based tile distribution across workgroups.
+// the fields may be set on the client side
 struct PersistentAsyncInputScheduler
 {
-    /// @brief Number of tiles per chunk in the M dimension.
-    uint32_t tiles_per_chunk_m;
+    uint32_t tiles_per_chunk_m = 0;
 
-    /// @brief Pointer to chunk completion signals in device memory.
-    uint32_t* chunk_signals;
+    uint32_t* chunk_signals = nullptr;
 
-    /// @brief Pivot tile index in the M dimension for scheduling decisions.
-    uint32_t tile_idx_pivot_m;
+    uint32_t tile_idx_pivot_m = 0;
 };
 
 } // namespace ck_tile
