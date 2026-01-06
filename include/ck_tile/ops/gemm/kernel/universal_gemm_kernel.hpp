@@ -31,20 +31,20 @@ namespace ck_tile {
 template <index_t NumATensor = 1, index_t NumBTensor = 1, index_t NumDTensor = 0>
 struct UniversalGemmHostArgs
 {
-    CK_TILE_HOST UniversalGemmHostArgs(const std::array<const void*, NumATensor>& as_ptr_,
-                                       const std::array<const void*, NumBTensor>& bs_ptr_,
-                                       const std::array<const void*, NumDTensor>& ds_ptr_,
-                                       void* e_ptr_,
-                                       index_t k_batch_,
-                                       index_t M_,
-                                       index_t N_,
-                                       index_t K_,
-                                       const std::array<index_t, NumATensor>& stride_As_,
-                                       const std::array<index_t, NumBTensor>& stride_Bs_,
-                                       const std::array<index_t, NumDTensor>& stride_Ds_,
-                                       index_t stride_E_,
-                                       PersistentAsyncInputScheduler async_input_scheduler_ =
-                                           PersistentAsyncInputScheduler{})
+    CK_TILE_HOST UniversalGemmHostArgs(
+        const std::array<const void*, NumATensor>& as_ptr_,
+        const std::array<const void*, NumBTensor>& bs_ptr_,
+        const std::array<const void*, NumDTensor>& ds_ptr_,
+        void* e_ptr_,
+        index_t k_batch_,
+        index_t M_,
+        index_t N_,
+        index_t K_,
+        const std::array<index_t, NumATensor>& stride_As_,
+        const std::array<index_t, NumBTensor>& stride_Bs_,
+        const std::array<index_t, NumDTensor>& stride_Ds_,
+        index_t stride_E_,
+        PersistentAsyncInputScheduler async_input_scheduler_ = PersistentAsyncInputScheduler{})
         : as_ptr(as_ptr_),
           bs_ptr(bs_ptr_),
           ds_ptr(ds_ptr_),
