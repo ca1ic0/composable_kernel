@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include <functional>
+#include <chrono>
+#include <thread>
 #include "gemm_utils.hpp"
+#include "ck_tile/host/hip_check_error.hpp"
+#include "ck_tile/host/device_memory.hpp"
 
 struct UniversalInvoker
 {
@@ -149,5 +153,169 @@ struct UniversalInvoker
             s,
             preprocess,
             ck_tile::make_kernel<GemmConfig::kBlockPerCu>(Kernel{}, grids, blocks, 0, kargs));
+    }
+
+    template <typename GemmConfig,
+              typename ADataType,
+              typename BDataType,
+              typename DsDataType,
+              typename AccDataType,
+              typename CDataType,
+              typename ALayout,
+              typename BLayout,
+              typename DsLayout,
+              typename ELayout,
+              typename CDEElementWise>
+    static void test_async_input_scheduler(const ck_tile::GemmHostArgs& args,
+                                           const ck_tile::stream_config& s)
+    {
+        using GemmShape = ck_tile::TileGemmShape<
+            ck_tile::sequence<GemmConfig::M_Tile, GemmConfig::N_Tile, GemmConfig::K_Tile>,
+            ck_tile::sequence<GemmConfig::M_Warp, GemmConfig::N_Warp, GemmConfig::K_Warp>,
+            ck_tile::sequence<GemmConfig::M_Warp_Tile, GemmConfig::N_Warp_Tile, GemmConfig::K_Warp_Tile>,
+            GemmConfig::PermuteA,
+            GemmConfig::PermuteB>;
+
+        using TilePartitioner =
+            ck_tile::GemmSpatiallyLocalTilePartitioner<GemmShape,
+                                                       GemmConfig::TileParitionerGroupNum,
+                                                       GemmConfig::TileParitionerM01>;
+
+        using GemmUniversalTraits =
+            ck_tile::TileGemmUniversalTraits<GemmConfig::kPadM,
+                                             GemmConfig::kPadN,
+                                             GemmConfig::kPadK,
+                                             GemmConfig::DoubleSmemBuffer,
+                                             ALayout,
+                                             BLayout,
+                                             ELayout,
+                                             GemmConfig::TransposeC,
+                                             GemmConfig::UseStructuredSparsity,
+                                             true,  // Persistent = true for async test
+                                             GemmConfig::NumWaveGroups,
+                                             GemmConfig::Preshuffle>;
+
+        constexpr auto scheduler = GemmConfig::Scheduler;
+
+        using UniversalGemmProblem = ck_tile::UniversalGemmPipelineProblem<ADataType,
+                                                                           BDataType,
+                                                                           AccDataType,
+                                                                           GemmShape,
+                                                                           GemmUniversalTraits,
+                                                                           scheduler>;
+
+        using GemmPipeline = typename PipelineTypeTraits<
+            GemmConfig::Pipeline>::template GemmPipeline<UniversalGemmProblem>;
+
+        using GemmEpilogue = ck_tile::CShuffleEpilogue<
+            ck_tile::CShuffleEpilogueProblem<ADataType,
+                                             BDataType,
+                                             DsDataType,
+                                             AccDataType,
+                                             CDataType,
+                                             DsLayout,
+                                             ELayout,
+                                             CDEElementWise,
+                                             TilePartitioner::MPerBlock,
+                                             TilePartitioner::NPerBlock,
+                                             GemmConfig::M_Warp,
+                                             GemmConfig::N_Warp,
+                                             GemmConfig::M_Warp_Tile,
+                                             GemmConfig::N_Warp_Tile,
+                                             GemmConfig::K_Warp_Tile,
+                                             UniversalGemmProblem::TransposeC,
+                                             GemmConfig::NumWaveGroups,
+                                             false,
+                                             1,
+                                             false,
+                                             1,
+                                             GemmConfig::DoubleSmemBuffer>>;
+
+        using Kernel = ck_tile::GemmKernel<TilePartitioner, GemmPipeline, GemmEpilogue>;
+
+        // Calculate number of M tiles and chunks
+        const ck_tile::index_t tiles_m = (args.M + TilePartitioner::MPerBlock - 1) / TilePartitioner::MPerBlock;
+        const ck_tile::index_t tiles_per_chunk = 2;  // 2 tiles per chunk
+        const ck_tile::index_t num_chunks = (tiles_m + tiles_per_chunk - 1) / tiles_per_chunk;
+
+        std::cout << "Async Input Scheduler Test:" << std::endl;
+        std::cout << "  M tiles: " << tiles_m << std::endl;
+        std::cout << "  Tiles per chunk: " << tiles_per_chunk << std::endl;
+        std::cout << "  Number of chunks: " << num_chunks << std::endl;
+
+        // Allocate chunk signals using ck_tile::DeviceMem (initialized to zero)
+        ck_tile::DeviceMem signal_buf(num_chunks * sizeof(uint32_t));
+        signal_buf.SetZero();
+        uint32_t* d_chunk_signals = static_cast<uint32_t*>(signal_buf.GetDeviceBuffer());
+
+        // Setup async input scheduler
+        ck_tile::PersistentAsyncInputScheduler async_scheduler;
+        async_scheduler.tiles_per_chunk_m = tiles_per_chunk;
+        async_scheduler.chunk_signals = d_chunk_signals;
+        async_scheduler.tile_idx_pivot_m = 0;
+
+        // Create modified host args with async scheduler
+        ck_tile::UniversalGemmHostArgs<1, 1, 0> host_args(
+            {args.a_ptr},
+            {args.b_ptr},
+            {},
+            args.e_ptr,
+            args.k_batch,
+            args.M,
+            args.N,
+            args.K,
+            {args.stride_A},
+            {args.stride_B},
+            {},
+            args.stride_E,
+            async_scheduler);
+
+        // Use UniversalGemmKernel::MakeKernelArgs to accept UniversalGemmHostArgs with async scheduler
+        auto kargs = Kernel::UniversalGemmKernel::MakeKernelArgs(host_args);
+
+        const dim3 grids = Kernel::MaxOccupancyGridSize(s);
+        const dim3 blocks = Kernel::BlockSize();
+
+        std::cout << "  Grid: {" << grids.x << ", " << grids.y << ", " << grids.z << "}" << std::endl;
+        std::cout << "  Blocks: {" << blocks.x << ", " << blocks.y << ", " << blocks.z << "}" << std::endl;
+
+        // Create stream config for async launch (no timing)
+        ck_tile::stream_config stream_cfg{s.stream_id_, false /*time_kernel*/, s.log_level_};
+
+        // Create a separate stream for setting signals
+        // (using the same stream would deadlock - memcpy waits for kernel, kernel waits for signal)
+        hipStream_t signal_stream;
+        HIP_CHECK_ERROR(hipStreamCreate(&signal_stream));
+
+        auto start = std::chrono::high_resolution_clock::now();
+
+        // Launch kernel using ck_tile::launch_kernel
+        ck_tile::launch_kernel(
+            stream_cfg,
+            ck_tile::make_kernel<GemmConfig::kBlockPerCu>(Kernel{}, grids, blocks, 0, kargs));
+
+        // Set signals with interleaved sleep using a separate stream
+        const int sleep_us = 100;  // 100 microseconds between signals
+        for(ck_tile::index_t i = 0; i < num_chunks; ++i)
+        {
+            std::this_thread::sleep_for(std::chrono::microseconds(sleep_us));
+            uint32_t signal_val = 1;
+            HIP_CHECK_ERROR(hipMemcpyAsync(d_chunk_signals + i, &signal_val, sizeof(uint32_t),
+                                           hipMemcpyHostToDevice, signal_stream));
+            HIP_CHECK_ERROR(hipStreamSynchronize(signal_stream));  // Ensure signal is visible to GPU
+            std::cout << "  Set signal[" << i << "] = 1" << std::endl;
+            std::cout.flush();
+        }
+
+        HIP_CHECK_ERROR(hipStreamSynchronize(s.stream_id_));  // Wait for kernel to complete
+        HIP_CHECK_ERROR(hipStreamDestroy(signal_stream));
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+        std::cout << "  Total time: " << duration.count() << " us" << std::endl;
+        std::cout << "  Expected minimum: " << (num_chunks * sleep_us) << " us" << std::endl;
+
+        // signal_buf cleans up automatically via RAII
     }
 };

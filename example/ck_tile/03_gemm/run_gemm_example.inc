@@ -339,6 +339,39 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
     c_m_n_dev_buf.SetZero();
     c_m_n_dev_result.SetZero();
 
+    // Check for async input scheduler test mode
+    bool test_async = arg_parser.get_int("test_async");
+    if(test_async)
+    {
+        ck_tile::GemmHostArgs args = {a_m_k_dev_buf.GetDeviceBuffer(),
+                                      b_k_n_dev_buf.GetDeviceBuffer(),
+                                      c_m_n_dev_buf.GetDeviceBuffer(),
+                                      kbatch,
+                                      M,
+                                      N,
+                                      K,
+                                      stride_A,
+                                      stride_B,
+                                      stride_C};
+
+        Invoker::template test_async_input_scheduler<GemmConfig,
+                                                     ADataType,
+                                                     BDataType,
+                                                     ck_tile::tuple<>,
+                                                     AccDataType,
+                                                     CDataType,
+                                                     ALayout,
+                                                     BLayout,
+                                                     ck_tile::tuple<>,
+                                                     CLayout,
+                                                     ck_tile::element_wise::PassThrough>(
+            args,
+            ck_tile::stream_config{nullptr, true, 1, 0, 1, true, false, 1});
+
+        std::cout << "Async input scheduler test completed." << std::endl;
+        return true;
+    }
+
     float ave_time = invoke_gemm<GemmConfig,
                                  Invoker,
                                  ADataType,
