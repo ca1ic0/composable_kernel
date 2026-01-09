@@ -158,6 +158,7 @@ float invoke_gemm(ck_tile::DeviceMem& a_m_k_dev_buf,
     }
     else
     {
+        std::cout << "invoke_gemm non-persistent" << std::endl;
         ave_time = Invoker::template gemm<GemmConfig,
                                           ADataType,
                                           BDataType,
@@ -219,11 +220,15 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
                                   const BLayout b_layout                  = BLayout{},
                                   [[maybe_unused]] const CLayout c_layout = CLayout{})
 {
+    std::cout << __func__ << std::endl;
     using AccDataType = typename GemmTypeConfig<ADataType, BDataType, CDataType>::AccDataType;
 
     ck_tile::index_t M = arg_parser.get_int("m");
     ck_tile::index_t N = arg_parser.get_int("n");
     ck_tile::index_t K = arg_parser.get_int("k");
+
+    std::cout << "M: " << M << " N: " << N << " K: " << K << std::endl;
+
 
     ck_tile::index_t stride_A = arg_parser.get_int("stride_a");
     ck_tile::index_t stride_B = arg_parser.get_int("stride_b");
@@ -338,6 +343,9 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
     a_m_k_dev_buf.ToDevice(a_m_k.data());
     c_m_n_dev_buf.SetZero();
     c_m_n_dev_result.SetZero();
+
+    // layout
+    std::cout << "a_layout: " << a_layout.name << " b_layout: " << b_layout.name << " c_layout: " << c_layout.name << std::endl;
 
     float ave_time = invoke_gemm<GemmConfig,
                                  Invoker,

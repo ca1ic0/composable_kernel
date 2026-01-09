@@ -1046,6 +1046,10 @@ struct UniversalGemmKernel
                                        const index_t block_idx_m,
                                        const index_t block_idx_n)
     {
+        // if(get_block_id() == 0 && get_thread_id() == 0)
+        // {
+        //     printf("RunGemm\n");
+        // }
         // Create block windows using specialized methods
         const auto& as_block_window =
             MakeABlockWindows(as_ptr, kargs, splitk_batch_offset.splitted_k, block_idx_m);
@@ -1130,6 +1134,10 @@ struct UniversalGemmKernel
     template <bool U = !PersistentKernel, typename = std::enable_if_t<U>>
     CK_TILE_DEVICE void operator()(KernelArgs kargs) const
     {
+        // if(get_block_id() == 0 && get_thread_id() == 0)
+        // {
+        //     printf("Non-persistent kernel entry point\n");
+        // }
         const auto blockId  = amd_wave_read_first_lane(blockIdx.x);
         const auto [iM, iN] = TilePartitioner{kargs.M, kargs.N}.GetOutputTileIndex(blockId);
         const index_t i_m   = amd_wave_read_first_lane(iM * TilePartitioner::MPerBlock);

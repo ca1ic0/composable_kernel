@@ -15,6 +15,7 @@
 template <template <typename PrecType> typename GemmConfig>
 int run_gemm_example(ck_tile::ArgParser& arg_parser)
 {
+    //std::cout << __func__ << std::endl;
     std::string data_type = arg_parser.get_str("prec");
     std::string a_layout  = arg_parser.get_str("a_layout");
     std::string b_layout  = arg_parser.get_str("b_layout");
@@ -23,6 +24,7 @@ int run_gemm_example(ck_tile::ArgParser& arg_parser)
 
     if(data_type == "fp16")
     {
+        std::cout << "fp16" << std::endl;
         return run_gemm_example_prec_type<GemmConfig<ck_tile::half_t>, Invoker, ck_tile::half_t>(
             a_layout, b_layout, arg_parser);
     }
@@ -109,6 +111,7 @@ int run_gemm_example(ck_tile::ArgParser& arg_parser)
 
 int main(int argc, char* argv[])
 {
+    //std::cout << __func__ << std::endl;
     auto arg_parser = create_args();
     auto result     = arg_parser.parse(argc, argv);
 
@@ -120,7 +123,7 @@ int main(int argc, char* argv[])
 #if CK_TILE_USE_WMMA
         return !run_gemm_example<GemmConfigComputeV3_WMMA>(arg_parser);
 #else
-        return !run_gemm_example<GemmConfigComputeV3_2>(arg_parser);
+        return !run_gemm_example<GemmConfigMemoryInterwave>(arg_parser);
 #endif
     }
     catch(const std::runtime_error& e)

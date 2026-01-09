@@ -12,6 +12,7 @@ int run_gemm_example_prec_type(std::string a_layout,
                                std::string b_layout,
                                ck_tile::ArgParser& arg_parser)
 {
+    std::cout << __func__ << std::endl;
     using Row       = ck_tile::tensor_layout::gemm::RowMajor;
     using Col       = ck_tile::tensor_layout::gemm::ColumnMajor;
     bool preshuffle = GemmConfig::Preshuffle;

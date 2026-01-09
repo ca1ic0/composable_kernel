@@ -257,6 +257,13 @@ struct GemmPipelineAgBgCrMem : public BaseGemmPipelineAgBgCrMem<Problem>
                                        index_t num_loop,
                                        void* p_smem) const
         {
+            if(get_block_id() == 0 && get_thread_id() == 0)
+            {
+                printf("operator()(const AsDramBlockWindowTmp& a_dram_block_window_tmp, const AElementFunction& a_element_func, const BsDramBlockWindowTmp& b_dram_block_window_tmp, const BElementFunction& b_element_func, index_t num_loop, void* p_smem)\n");
+                printf("num_loop: %d\n", num_loop);
+                printf("PrefetchStages: %d\n", PrefetchStages);
+                printf("HasHotLoop: %d\n", HasHotLoop);
+            }
             using ADramBlockWindowTmp =
                 remove_cvref_t<std::tuple_element_t<number<0>{}, AsDramBlockWindowTmp>>;
             using BDramBlockWindowTmp =
@@ -285,6 +292,13 @@ struct GemmPipelineAgBgCrMem : public BaseGemmPipelineAgBgCrMem<Problem>
                               : (NPerBlock == BDramBlockWindowTmp{}.get_window_lengths()[I0{}] &&
                                  KPerBlock == BDramBlockWindowTmp{}.get_window_lengths()[I1{}]),
                           "B block window has incorrect lengths for defined BLayout!");
+
+            // print window lengths
+            if(get_block_id() == 0 && get_thread_id() == 0)
+            {
+              printf("A block window lengths: %d %d\n", ADramBlockWindowTmp{}.get_window_lengths()[I0{}].value, ADramBlockWindowTmp{}.get_window_lengths()[I1{}].value);
+              printf("B block window lengths: %d %d\n", BDramBlockWindowTmp{}.get_window_lengths()[I0{}].value, BDramBlockWindowTmp{}.get_window_lengths()[I1{}].value);
+            }
 
             // ------------------------------------------------------------------------------------
             // Definitions of all needed tiles
@@ -508,6 +522,10 @@ struct GemmPipelineAgBgCrMem : public BaseGemmPipelineAgBgCrMem<Problem>
                 block_gemm(c_block_tile, a_lds_gemm_window, b_lds_gemm_window);
             };
 
+            if(get_block_id() == 0 && get_thread_id() == 0)
+            {
+                printf("TailNum = %d\n", static_cast<int>(num_loop % PrefetchStages));
+            }
             if constexpr(TailNum == TailNumber::One)
             {
                 block_sync_lds();
@@ -963,6 +981,10 @@ struct GemmPipelineAgBgCrMem : public BaseGemmPipelineAgBgCrMem<Problem>
                                    index_t num_loop,
                                    void* p_smem) const
     {
+        // if(get_block_id() == 0 && get_thread_id() == 0)
+        // {
+        //     printf("operator()(const ADramBlockWindowTmp& a_dram_block_window_tmp, const AElementFunction& a_element_func, const BDramBlockWindowTmp& b_dram_block_window_tmp, const BElementFunction& b_element_func, index_t num_loop, void* p_smem)\n");
+        // }
         return operator()(ck_tile::make_tuple(a_dram_block_window_tmp),
                           a_element_func,
                           ck_tile::make_tuple(b_dram_block_window_tmp),

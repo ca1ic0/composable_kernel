@@ -233,7 +233,11 @@ struct BlockUniversalGemmAsBsCr
             load_int4_tile<BDataType, BTypeToUse, UnaryOpSize_, BLoadTranspose>(b_warp_tile_,
                                                                                 b_block_window);
             // hot loop:
+            printf("GemmTraits::KIterPerWarp: %d\n", GemmTraits::KIterPerWarp);
+            printf("MIterPerWarp: %d\n", MIterPerWarp);
+            printf("NIterPerWarp: %d\n", NIterPerWarp);
             static_for<0, GemmTraits::KIterPerWarp, 1>{}([&](auto kIter) {
+                printf("kIter: %d\n", kIter);
                 static_for<0, MIterPerWarp, 1>{}([&](auto mIter) {
                     // read A warp tensor from A block tensor
                     AWarpTensor a_warp_tensor;
@@ -312,6 +316,13 @@ struct BlockUniversalGemmAsBsCr
                                        bool_constant<ALoadTranspose> = {},
                                        bool_constant<BLoadTranspose> = {})
         {
+            if(get_block_id() == 0 && get_thread_id() == 0)
+            {
+                printf("operator()(CBlockTensor& c_block_tensor, const ASmemBlockWindow&, const BSmemBlockWindow&, bool_constant<ALoadTranspose> = {}, bool_constant<BLoadTranspose> = {})\n");
+                printf("KIterPerWarp: %d\n", KIterPerWarp);
+                printf("MIterPerWarp: %d\n", MIterPerWarp);
+                printf("NIterPerWarp: %d\n", NIterPerWarp);
+            }
             static_assert(std::is_same_v<CDataType, typename CBlockTensor::DataType>,
                           "The CDataType as defined in traits should be the same as correspoinding "
                           "C block tensor data type!");
@@ -443,6 +454,15 @@ struct BlockUniversalGemmAsBsCr
                                        bool_constant<ALoadTranspose> a_load_tr = {},
                                        bool_constant<BLoadTranspose> b_load_tr = {})
         {
+            if(get_block_id() == 0 && get_thread_id() == 0)
+            {
+                printf("Interwave");
+                printf("operator()(CBlockTensor& c_block_tensor, const ASmemBlockWindow&, const BSmemBlockWindow&, bool_constant<ALoadTranspose> = {}, bool_constant<BLoadTranspose> = {})\n");
+                printf("KRepeat: %d\n", KRepeat);
+                printf("KInnerLoopIter: %d\n", KInnerLoopIter);
+                printf("MIterPerWarp: %d\n", MIterPerWarp);
+                printf("NIterPerWarp: %d\n", NIterPerWarp);
+            }
             static_assert(std::is_same_v<CDataType, typename CBlockTensor::DataType>,
                           "The CDataType as defined in traits should be the same as correspoinding "
                           "C block tensor data type!");
