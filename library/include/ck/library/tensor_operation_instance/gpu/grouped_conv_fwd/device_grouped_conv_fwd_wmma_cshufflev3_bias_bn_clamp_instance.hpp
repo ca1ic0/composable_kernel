@@ -25,8 +25,8 @@ using S = ck::Sequence<Is...>;
 
 using namespace ck::tensor_layout::convolution;
 
-using PassThrough = ck::tensor_operation::element_wise::PassThrough;
-using BiasNormalizeInInferClamp       = ck::tensor_operation::element_wise::BiasNormalizeInInferClamp;
+using PassThrough               = ck::tensor_operation::element_wise::PassThrough;
+using BiasNormalizeInInferClamp = ck::tensor_operation::element_wise::BiasNormalizeInInferClamp;
 
 static constexpr auto ConvFwdDefault =
     ck::tensor_operation::device::ConvolutionForwardSpecialization::Default;
