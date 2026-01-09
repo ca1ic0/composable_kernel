@@ -350,12 +350,12 @@ bool profile_grouped_conv_fwd_bias_bnorm_clamp_impl(int do_verification,
 
                 if(ck::is_gfx11_supported())
                 {
-                    int atol = 2;
-                    int rtol = 1;
+                    double rtol = 2e-2;
+                    double atol = 1e-2;
 
                     const std::string& msg = "Error: Incorrect results!";
 
-                    pass = pass & ck::utils::check_err(device_output, host_output, msg, atol, rtol);
+                    pass = pass & ck::utils::check_err(device_output, host_output, msg, rtol, atol);
                 }
                 else
                 {
