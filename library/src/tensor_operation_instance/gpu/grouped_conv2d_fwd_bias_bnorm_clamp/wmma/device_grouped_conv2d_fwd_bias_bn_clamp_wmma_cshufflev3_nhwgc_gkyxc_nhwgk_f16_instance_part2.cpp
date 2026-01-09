@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "ck/library/tensor_operation_instance/add_device_operation_instance.hpp"
-#include "ck/library/tensor_operation_instance/gpu/grouped_conv_fwd/device_grouped_conv_fwd_wmma_cshufflev3_instance.hpp"
+#include "ck/library/tensor_operation_instance/gpu/grouped_conv_fwd/device_grouped_conv_fwd_wmma_cshufflev3_bias_bn_clamp_instance.hpp"
 
 namespace ck {
 namespace tensor_operation {
@@ -24,7 +24,7 @@ void add_device_grouped_conv2d_fwd_bias_bn_clamp_wmma_cshufflev3_nhwgc_gkyxc_nhw
                                                         BiasNormalizeInInferClamp>>>& instances)
 {
     add_device_operation_instances(instances,
-                                   device_grouped_conv_fwd_wmma_cshufflev3_f16_instances_part2<
+                                   device_grouped_conv_fwd_wmma_cshufflev3_biasbnclamp_f16_instances_part2<
                                        2,
                                        NHWGC,
                                        GKYXC,
@@ -35,7 +35,7 @@ void add_device_grouped_conv2d_fwd_bias_bn_clamp_wmma_cshufflev3_nhwgc_gkyxc_nhw
                                        BiasNormalizeInInferClamp>{});
 
     add_device_operation_instances(instances,
-                                   device_grouped_conv_fwd_wmma_cshufflev3_f16_instances_part2<
+                                   device_grouped_conv_fwd_wmma_cshufflev3_biasbnclamp_f16_instances_part2<
                                        2,
                                        NHWGC,
                                        GKYXC,
@@ -46,7 +46,7 @@ void add_device_grouped_conv2d_fwd_bias_bn_clamp_wmma_cshufflev3_nhwgc_gkyxc_nhw
                                        BiasNormalizeInInferClamp>{});
 
     add_device_operation_instances(instances,
-                                   device_grouped_conv_fwd_wmma_cshufflev3_f16_instances_part2<
+                                   device_grouped_conv_fwd_wmma_cshufflev3_biasbnclamp_f16_instances_part2<
                                        2,
                                        NHWGC,
                                        GKYXC,
