@@ -14,6 +14,7 @@
 #include "ck_tile/core/utility/env.hpp"
 #include "ck_tile/core/utility/type_traits.hpp"
 #include "ck_tile/core/utility/persistent_async_input_scheduler.hpp"
+#include "ck_tile/core/arch/workgroup_barrier.hpp"
 
 namespace ck_tile {
 
@@ -1193,6 +1194,19 @@ struct UniversalGemmKernel
             const auto [iM, iN] = TilePartitioner{kargs.M, kargs.N}.GetOutputTileIndex(tile_idx);
             const index_t i_m   = amd_wave_read_first_lane(iM * TilePartitioner::MPerBlock);
             const index_t i_n   = amd_wave_read_first_lane(iN * TilePartitioner::NPerBlock);
+
+            // Wait for async input chunk if scheduler is configured
+            if(kargs.async_input_scheduler.chunk_signals != nullptr)
+            {
+                const auto tiles_per_chunk = amd_wave_read_first_lane(
+                    kargs.async_input_scheduler.tiles_per_chunk_m);
+                if(tiles_per_chunk > 0)
+                {
+                    const auto chunk_idx = amd_wave_read_first_lane(iM / tiles_per_chunk);
+                    workgroup_barrier chunk_barrier(kargs.async_input_scheduler.chunk_signals);
+                    chunk_barrier.wait_signal(chunk_idx);
+                }
+            }
 
             // Get the SplitK offset for this block
             const auto k_batch = amd_wave_read_first_lane(block_id / num_tiles);

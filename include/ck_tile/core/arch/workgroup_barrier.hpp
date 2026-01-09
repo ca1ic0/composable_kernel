@@ -35,6 +35,28 @@ struct workgroup_barrier
         __syncthreads();
     }
 
+    CK_TILE_DEVICE void wait_signal(uint32_t offset = 0)
+    {
+        if(threadIdx.x == 0)
+        {
+#ifdef CK_TILE_DEBUG
+            uint32_t iterations = 0;
+            constexpr uint32_t max_iterations = 10000000;  // ~300-430ms timeout
+#endif
+            while(ld(offset) == 0)
+            {
+                __builtin_amdgcn_s_sleep(1);  // ~64 cycles (~30-43 ns)
+#ifdef CK_TILE_DEBUG
+                if(++iterations >= max_iterations)
+                {
+                    __builtin_trap();  // Signal timeout
+                }
+#endif
+            }
+        }
+        __syncthreads();
+    }
+
     CK_TILE_DEVICE void wait_set(uint32_t compare, uint32_t value, uint32_t offset = 0)
     {
         if(threadIdx.x == 0)
