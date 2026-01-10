@@ -365,8 +365,7 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
                                                      ck_tile::tuple<>,
                                                      CLayout,
                                                      ck_tile::element_wise::PassThrough>(
-            args,
-            ck_tile::stream_config{nullptr, false, 1});
+            args, ck_tile::stream_config{nullptr, false, 1});
 
         // Copy result from device for verification
         c_m_n_dev_buf.FromDevice(c_m_n_dev_result.data());

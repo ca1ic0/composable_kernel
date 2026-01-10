@@ -172,7 +172,8 @@ struct UniversalInvoker
         using GemmShape = ck_tile::TileGemmShape<
             ck_tile::sequence<GemmConfig::M_Tile, GemmConfig::N_Tile, GemmConfig::K_Tile>,
             ck_tile::sequence<GemmConfig::M_Warp, GemmConfig::N_Warp, GemmConfig::K_Warp>,
-            ck_tile::sequence<GemmConfig::M_Warp_Tile, GemmConfig::N_Warp_Tile, GemmConfig::K_Warp_Tile>,
+            ck_tile::
+                sequence<GemmConfig::M_Warp_Tile, GemmConfig::N_Warp_Tile, GemmConfig::K_Warp_Tile>,
             GemmConfig::PermuteA,
             GemmConfig::PermuteB>;
 
@@ -191,7 +192,7 @@ struct UniversalInvoker
                                              ELayout,
                                              GemmConfig::TransposeC,
                                              GemmConfig::UseStructuredSparsity,
-                                             true,  // Persistent = true for async test
+                                             true, // Persistent = true for async test
                                              GemmConfig::NumWaveGroups,
                                              GemmConfig::Preshuffle>;
 
@@ -234,18 +235,22 @@ struct UniversalInvoker
         using Kernel = ck_tile::GemmKernel<TilePartitioner, GemmPipeline, GemmEpilogue>;
 
         // Calculate number of M tiles and chunks
-        const ck_tile::index_t tiles_m = (args.M + TilePartitioner::MPerBlock - 1) / TilePartitioner::MPerBlock;
-        const ck_tile::index_t tiles_per_chunk = 2;  // 2 tiles per chunk
+        const ck_tile::index_t tiles_m =
+            (args.M + TilePartitioner::MPerBlock - 1) / TilePartitioner::MPerBlock;
+        const ck_tile::index_t tiles_per_chunk = 2; // 2 tiles per chunk
         // Pivot: first chunk of tiles (tiles 0 to tiles_per_chunk-1) are immediately available
         // Only tiles from tile_idx_pivot_m onwards need to wait for signals
-        const ck_tile::index_t tile_idx_pivot = tiles_per_chunk;  // Skip first chunk
-        const ck_tile::index_t tiles_needing_signals = (tiles_m > tile_idx_pivot) ? (tiles_m - tile_idx_pivot) : 0;
-        const ck_tile::index_t num_chunks = (tiles_needing_signals + tiles_per_chunk - 1) / tiles_per_chunk;
+        const ck_tile::index_t tile_idx_pivot = tiles_per_chunk; // Skip first chunk
+        const ck_tile::index_t tiles_needing_signals =
+            (tiles_m > tile_idx_pivot) ? (tiles_m - tile_idx_pivot) : 0;
+        const ck_tile::index_t num_chunks =
+            (tiles_needing_signals + tiles_per_chunk - 1) / tiles_per_chunk;
 
         std::cout << "Async Input Scheduler Test:" << std::endl;
         std::cout << "  M tiles: " << tiles_m << std::endl;
         std::cout << "  Tiles per chunk: " << tiles_per_chunk << std::endl;
-        std::cout << "  Tile index pivot: " << tile_idx_pivot << " (first " << tile_idx_pivot << " tiles don't wait)" << std::endl;
+        std::cout << "  Tile index pivot: " << tile_idx_pivot << " (first " << tile_idx_pivot
+                  << " tiles don't wait)" << std::endl;
         std::cout << "  Tiles needing signals: " << tiles_needing_signals << std::endl;
         std::cout << "  Number of signal chunks: " << num_chunks << std::endl;
 
@@ -258,32 +263,33 @@ struct UniversalInvoker
         // Setup async input scheduler
         ck_tile::PersistentAsyncInputScheduler async_scheduler;
         async_scheduler.tiles_per_chunk_m = tiles_per_chunk;
-        async_scheduler.chunk_signals = d_chunk_signals;
-        async_scheduler.tile_idx_pivot_m = tile_idx_pivot;
+        async_scheduler.chunk_signals     = d_chunk_signals;
+        async_scheduler.tile_idx_pivot_m  = tile_idx_pivot;
 
         // Create modified host args with async scheduler
-        ck_tile::UniversalGemmHostArgs<1, 1, 0> host_args(
-            {args.a_ptr},
-            {args.b_ptr},
-            {},
-            args.e_ptr,
-            args.k_batch,
-            args.M,
-            args.N,
-            args.K,
-            {args.stride_A},
-            {args.stride_B},
-            {},
-            args.stride_E,
-            async_scheduler);
+        ck_tile::UniversalGemmHostArgs<1, 1, 0> host_args({args.a_ptr},
+                                                          {args.b_ptr},
+                                                          {},
+                                                          args.e_ptr,
+                                                          args.k_batch,
+                                                          args.M,
+                                                          args.N,
+                                                          args.K,
+                                                          {args.stride_A},
+                                                          {args.stride_B},
+                                                          {},
+                                                          args.stride_E,
+                                                          async_scheduler);
 
         auto kargs = Kernel::UniversalGemmKernel::MakeKernelArgs(host_args);
 
-        const dim3 grids = Kernel::MaxOccupancyGridSize(s);
+        const dim3 grids  = Kernel::MaxOccupancyGridSize(s);
         const dim3 blocks = Kernel::BlockSize();
 
-        std::cout << "  Grid: {" << grids.x << ", " << grids.y << ", " << grids.z << "}" << std::endl;
-        std::cout << "  Blocks: {" << blocks.x << ", " << blocks.y << ", " << blocks.z << "}" << std::endl;
+        std::cout << "  Grid: {" << grids.x << ", " << grids.y << ", " << grids.z << "}"
+                  << std::endl;
+        std::cout << "  Blocks: {" << blocks.x << ", " << blocks.y << ", " << blocks.z << "}"
+                  << std::endl;
 
         // Create a separate stream for setting signals
         // (using the same stream would deadlock - memcpy waits for kernel, kernel waits for signal)
@@ -293,22 +299,25 @@ struct UniversalInvoker
         const auto start = std::chrono::high_resolution_clock::now();
 
         ck_tile::launch_kernel(
-            s,
-            ck_tile::make_kernel<GemmConfig::kBlockPerCu>(Kernel{}, grids, blocks, 0, kargs));
+            s, ck_tile::make_kernel<GemmConfig::kBlockPerCu>(Kernel{}, grids, blocks, 0, kargs));
 
         // Set signals with interleaved sleep using a separate stream
-        const int sleep_us = 100;  
+        const int sleep_us = 100;
         for(ck_tile::index_t i = 0; i < num_chunks; ++i)
         {
             std::this_thread::sleep_for(std::chrono::microseconds(sleep_us));
             const uint32_t signal_val = 1;
-            HIP_CHECK_ERROR(hipMemcpyAsync(d_chunk_signals + i, &signal_val, sizeof(uint32_t),
-                                           hipMemcpyHostToDevice, signal_stream));
+            HIP_CHECK_ERROR(hipMemcpyAsync(d_chunk_signals + i,
+                                           &signal_val,
+                                           sizeof(uint32_t),
+                                           hipMemcpyHostToDevice,
+                                           signal_stream));
         }
         HIP_CHECK_ERROR(hipStreamSynchronize(signal_stream));
         HIP_CHECK_ERROR(hipStreamDestroy(signal_stream));
 
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start);
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now() - start);
 
         std::cout << "  Total time: " << duration.count() << " us" << std::endl;
         std::cout << "  Sleep time: " << (num_chunks * sleep_us) << " us" << std::endl;
