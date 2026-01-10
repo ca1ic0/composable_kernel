@@ -289,33 +289,28 @@ struct UniversalInvoker
 
         auto start = std::chrono::high_resolution_clock::now();
 
-        // Launch kernel using ck_tile::launch_kernel
         ck_tile::launch_kernel(
             stream_cfg,
             ck_tile::make_kernel<GemmConfig::kBlockPerCu>(Kernel{}, grids, blocks, 0, kargs));
 
         // Set signals with interleaved sleep using a separate stream
-        const int sleep_us = 100;  // 100 microseconds between signals
+        const int sleep_us = 100;  
         for(ck_tile::index_t i = 0; i < num_chunks; ++i)
         {
             std::this_thread::sleep_for(std::chrono::microseconds(sleep_us));
             uint32_t signal_val = 1;
             HIP_CHECK_ERROR(hipMemcpyAsync(d_chunk_signals + i, &signal_val, sizeof(uint32_t),
                                            hipMemcpyHostToDevice, signal_stream));
-            HIP_CHECK_ERROR(hipStreamSynchronize(signal_stream));  // Ensure signal is visible to GPU
             std::cout << "  Set signal[" << i << "] = 1" << std::endl;
             std::cout.flush();
         }
-
-        HIP_CHECK_ERROR(hipStreamSynchronize(s.stream_id_));  // Wait for kernel to complete
+        HIP_CHECK_ERROR(hipStreamSynchronize(signal_stream));
         HIP_CHECK_ERROR(hipStreamDestroy(signal_stream));
 
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
         std::cout << "  Total time: " << duration.count() << " us" << std::endl;
-        std::cout << "  Expected minimum: " << (num_chunks * sleep_us) << " us" << std::endl;
-
-        // signal_buf cleans up automatically via RAII
+        std::cout << "  Sleep time: " << (num_chunks * sleep_us) << " us" << std::endl;
     }
 };

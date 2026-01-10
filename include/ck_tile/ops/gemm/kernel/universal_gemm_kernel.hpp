@@ -1204,7 +1204,7 @@ struct UniversalGemmKernel
                 {
                     const auto chunk_idx = amd_wave_read_first_lane(iM / tiles_per_chunk);
                     workgroup_barrier chunk_barrier(kargs.async_input_scheduler.chunk_signals);
-                    chunk_barrier.wait_signal(chunk_idx);
+                    chunk_barrier.wait_eq(/*value=*/ 1, /*offset=*/ chunk_idx);
                 }
             }
 
