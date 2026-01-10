@@ -14,7 +14,7 @@ struct PersistentAsyncInputScheduler
 
     uint32_t* chunk_signals = nullptr;
 
-    uint32_t tile_idx_pivot_m = 0;
+    int32_t tile_idx_pivot_m = 0;
 };
 
 } // namespace ck_tile

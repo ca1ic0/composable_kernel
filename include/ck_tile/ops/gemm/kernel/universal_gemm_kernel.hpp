@@ -1200,9 +1200,13 @@ struct UniversalGemmKernel
             {
                 const auto tiles_per_chunk = amd_wave_read_first_lane(
                     kargs.async_input_scheduler.tiles_per_chunk_m);
-                if(tiles_per_chunk > 0)
+                const auto tile_idx_pivot = amd_wave_read_first_lane(
+                    kargs.async_input_scheduler.tile_idx_pivot_m);
+                // Only wait for tiles at or beyond the pivot (tiles before pivot are already available)
+                if(tiles_per_chunk > 0 && iM >= tile_idx_pivot)
                 {
-                    const auto chunk_idx = amd_wave_read_first_lane(iM / tiles_per_chunk);
+                    // Chunk index is relative to the pivot
+                    const auto chunk_idx = amd_wave_read_first_lane((iM - tile_idx_pivot) / tiles_per_chunk);
                     workgroup_barrier chunk_barrier(kargs.async_input_scheduler.chunk_signals);
                     chunk_barrier.wait_eq(/*value=*/ 1, /*offset=*/ chunk_idx);
                 }

@@ -236,14 +236,21 @@ struct UniversalInvoker
         // Calculate number of M tiles and chunks
         const ck_tile::index_t tiles_m = (args.M + TilePartitioner::MPerBlock - 1) / TilePartitioner::MPerBlock;
         const ck_tile::index_t tiles_per_chunk = 2;  // 2 tiles per chunk
-        const ck_tile::index_t num_chunks = (tiles_m + tiles_per_chunk - 1) / tiles_per_chunk;
+        // Pivot: first chunk of tiles (tiles 0 to tiles_per_chunk-1) are immediately available
+        // Only tiles from tile_idx_pivot_m onwards need to wait for signals
+        const ck_tile::index_t tile_idx_pivot = tiles_per_chunk;  // Skip first chunk
+        const ck_tile::index_t tiles_needing_signals = (tiles_m > tile_idx_pivot) ? (tiles_m - tile_idx_pivot) : 0;
+        const ck_tile::index_t num_chunks = (tiles_needing_signals + tiles_per_chunk - 1) / tiles_per_chunk;
 
         std::cout << "Async Input Scheduler Test:" << std::endl;
         std::cout << "  M tiles: " << tiles_m << std::endl;
         std::cout << "  Tiles per chunk: " << tiles_per_chunk << std::endl;
-        std::cout << "  Number of chunks: " << num_chunks << std::endl;
+        std::cout << "  Tile index pivot: " << tile_idx_pivot << " (first " << tile_idx_pivot << " tiles don't wait)" << std::endl;
+        std::cout << "  Tiles needing signals: " << tiles_needing_signals << std::endl;
+        std::cout << "  Number of signal chunks: " << num_chunks << std::endl;
 
         // Allocate chunk signals using ck_tile::DeviceMem (initialized to zero)
+        // Only need signals for chunks beyond the pivot
         ck_tile::DeviceMem signal_buf(num_chunks * sizeof(uint32_t));
         signal_buf.SetZero();
         uint32_t* d_chunk_signals = static_cast<uint32_t*>(signal_buf.GetDeviceBuffer());
@@ -252,7 +259,7 @@ struct UniversalInvoker
         ck_tile::PersistentAsyncInputScheduler async_scheduler;
         async_scheduler.tiles_per_chunk_m = tiles_per_chunk;
         async_scheduler.chunk_signals = d_chunk_signals;
-        async_scheduler.tile_idx_pivot_m = 0;
+        async_scheduler.tile_idx_pivot_m = tile_idx_pivot;
 
         // Create modified host args with async scheduler
         ck_tile::UniversalGemmHostArgs<1, 1, 0> host_args(
