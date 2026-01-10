@@ -366,10 +366,27 @@ int run_gemm_example_with_layouts(ck_tile::ArgParser& arg_parser,
                                                      CLayout,
                                                      ck_tile::element_wise::PassThrough>(
             args,
-            ck_tile::stream_config{nullptr, true, 1, 0, 1, true, false, 1});
+            ck_tile::stream_config{nullptr, false, 1});
 
-        std::cout << "Async input scheduler test completed." << std::endl;
-        return true;
+        // Copy result from device for verification
+        c_m_n_dev_buf.FromDevice(c_m_n_dev_result.data());
+
+        // Compute CPU reference
+        ck_tile::HostTensor<CDataType> c_m_n_ref(
+            ck_tile::host_tensor_descriptor(M, N, stride_C, is_row_major(CLayout{})));
+        c_m_n_ref.SetZero();
+        ck_tile::reference_gemm<ADataType, BDataType, AccDataType, CDataType>(
+            a_m_k, b_k_n, c_m_n_ref);
+
+        // Verify results
+        const float max_accumulated_value =
+            *std::max_element(c_m_n_ref.mData.begin(), c_m_n_ref.mData.end());
+        const auto rtol_atol = calculate_rtol_atol<ADataType, BDataType, AccDataType, CDataType>(
+            K, kbatch, max_accumulated_value);
+        bool pass = do_verify(c_m_n_dev_result, c_m_n_ref, rtol_atol, "CPU");
+
+        std::cout << "Async input scheduler test: " << (pass ? "PASS" : "FAIL") << std::endl;
+        return pass;
     }
 
     float ave_time = invoke_gemm<GemmConfig,

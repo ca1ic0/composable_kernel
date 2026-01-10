@@ -270,7 +270,6 @@ struct UniversalInvoker
             args.stride_E,
             async_scheduler);
 
-        // Use UniversalGemmKernel::MakeKernelArgs to accept UniversalGemmHostArgs with async scheduler
         auto kargs = Kernel::UniversalGemmKernel::MakeKernelArgs(host_args);
 
         const dim3 grids = Kernel::MaxOccupancyGridSize(s);
@@ -279,18 +278,15 @@ struct UniversalInvoker
         std::cout << "  Grid: {" << grids.x << ", " << grids.y << ", " << grids.z << "}" << std::endl;
         std::cout << "  Blocks: {" << blocks.x << ", " << blocks.y << ", " << blocks.z << "}" << std::endl;
 
-        // Create stream config for async launch (no timing)
-        ck_tile::stream_config stream_cfg{s.stream_id_, false /*time_kernel*/, s.log_level_};
-
         // Create a separate stream for setting signals
         // (using the same stream would deadlock - memcpy waits for kernel, kernel waits for signal)
         hipStream_t signal_stream;
-        HIP_CHECK_ERROR(hipStreamCreate(&signal_stream));
+        HIP_CHECK_ERROR(hipStreamCreateWithFlags(&signal_stream, hipStreamNonBlocking));
 
-        auto start = std::chrono::high_resolution_clock::now();
+        const auto start = std::chrono::high_resolution_clock::now();
 
         ck_tile::launch_kernel(
-            stream_cfg,
+            s,
             ck_tile::make_kernel<GemmConfig::kBlockPerCu>(Kernel{}, grids, blocks, 0, kargs));
 
         // Set signals with interleaved sleep using a separate stream
@@ -298,17 +294,14 @@ struct UniversalInvoker
         for(ck_tile::index_t i = 0; i < num_chunks; ++i)
         {
             std::this_thread::sleep_for(std::chrono::microseconds(sleep_us));
-            uint32_t signal_val = 1;
+            const uint32_t signal_val = 1;
             HIP_CHECK_ERROR(hipMemcpyAsync(d_chunk_signals + i, &signal_val, sizeof(uint32_t),
                                            hipMemcpyHostToDevice, signal_stream));
-            std::cout << "  Set signal[" << i << "] = 1" << std::endl;
-            std::cout.flush();
         }
         HIP_CHECK_ERROR(hipStreamSynchronize(signal_stream));
         HIP_CHECK_ERROR(hipStreamDestroy(signal_stream));
 
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start);
 
         std::cout << "  Total time: " << duration.count() << " us" << std::endl;
         std::cout << "  Sleep time: " << (num_chunks * sleep_us) << " us" << std::endl;
